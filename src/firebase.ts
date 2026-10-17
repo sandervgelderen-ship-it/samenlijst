@@ -7,7 +7,7 @@ import firebaseConfig from '../firebase-applet-config.json';
 // Samenlijst keeps its data in its own top-level collections (samenlijstHouseholds, samenlijstInvites).
 setLogLevel('silent');
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 
 // Offline cache: the list keeps working in a supermarket without signal, and
 // every write shows up on screen immediately (Firestore latency compensation).

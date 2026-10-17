@@ -1,0 +1,75 @@
+/**
+ * AI without our own server: the web version (GitHub Pages) calls Gemini through
+ * Firebase AI Logic, in the same Firebase project. No API key ends up in the site;
+ * Firebase holds it. Uses the same prompts as the Express server (src/server/prompts.ts),
+ * so both versions answer the same way.
+ */
+import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
+import { app } from '../firebase';
+import {
+  analyzePrompt, elaboratePrompt, forgotPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+} from '../server/prompts';
+
+const MODEL = 'gemini-2.5-flash';
+let model: ReturnType<typeof getGenerativeModel> | null = null;
+function getModel() {
+  if (!model) {
+    const ai = getAI(app, { backend: new GoogleAIBackend() });
+    model = getGenerativeModel(ai, { model: MODEL, generationConfig: { responseMimeType: 'application/json' } });
+  }
+  return model;
+}
+
+// Without a response schema, each prompt ends with the exact JSON shape we parse.
+const SHAPE: Record<string, string> = {
+  'analyze': '[{"i":0,"text":"Halfvolle melk","qty":"2 pak","note":"","cat":"zuivel","due":"","list":"<lijst-id>","confidence":0.95}]',
+  'questions': '{"questions":[{"q":"Hoeveel kamers gaan er mee?","options":["1 of 2","3 of 4","5 of meer"],"multi":false}]}',
+  'elaborate': '{"detail":"...","steps":[{"text":"Uitnodigingen versturen","due":""}],"tips":["..."],"buy":[{"text":"Slingers","qty":"2 st"}]}',
+  'smart-add-shop': '[{"text":"Lasagnebladen","qty":"1 pak","cat":"houdbaar","pantry":false,"why":""}]',
+  'smart-add-todo': '[{"text":"Verhuisdozen regelen","due":"","note":""}]',
+  'forgot': '[{"text":"Pastasaus","qty":"1 pot","cat":"houdbaar","why":"Spaghetti staat erop, saus nog niet"}]',
+  'sort-aisles': '[{"i":0,"cat":"zuivel"}]',
+  'voice-memo': '{"transcript":"...","items":[{"text":"Melk","qty":"2 pak","due":""}]}',
+  'route-items': '[{"i":0,"list":"<lijst-id>","confidence":0.9}]',
+};
+
+function media(dataUrl: unknown, kind: 'image' | 'audio') {
+  if (typeof dataUrl !== 'string') return null;
+  const m = dataUrl.match(new RegExp(`^data:(${kind}/[a-z0-9.+-]+)(?:;[^,]*)?;base64,(.+)$`, 'i'));
+  return m ? { inlineData: { mimeType: m[1], data: m[2] } } : null;
+}
+
+export async function runLocal(path: string, body: any): Promise<unknown> {
+  let prompt = '', shape = SHAPE[path] || '';
+  let attachment: ReturnType<typeof media> = null;
+  switch (path) {
+    case 'analyze': prompt = analyzePrompt(body); break;
+    case 'questions': prompt = questionsPrompt(body); break;
+    case 'elaborate': prompt = elaboratePrompt(body); break;
+    case 'forgot': prompt = forgotPrompt(body); break;
+    case 'sort-aisles': prompt = sortPrompt(body); break;
+    case 'route-items': prompt = routePrompt(body); break;
+    case 'smart-add':
+      attachment = media(body?.image, 'image');
+      prompt = smartAddPrompt(body, !!attachment);
+      shape = SHAPE[body?.kind === 'shop' ? 'smart-add-shop' : 'smart-add-todo'];
+      break;
+    case 'voice-memo':
+      attachment = media(body?.audio, 'audio');
+      if (!attachment) throw new Error('Er kwam geen opname mee. Probeer het opnieuw.');
+      prompt = voicePrompt(body);
+      break;
+    default: throw new Error(`Onbekende AI-functie: ${path}`);
+  }
+  const text = `${prompt}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet van toepassing is):\n${shape}`;
+  const parts: (string | { inlineData: { mimeType: string; data: string } })[] = [text];
+  if (attachment) parts.push(attachment);
+  const result = await getModel().generateContent(parts);
+  const out = result.response.text().trim();
+  try { return JSON.parse(out); }
+  catch {
+    const m = out.match(/```(?:json)?\s*([\s\S]*?)```/) || out.match(/([\[{][\s\S]*[\]}])/);
+    if (m) { try { return JSON.parse(m[1]); } catch { /* fall through */ } }
+    return {};
+  }
+}

@@ -15,6 +15,17 @@ Gedeelde boodschappen- en takenlijsten voor het hele huishouden. Gebouwd op deze
 - **Slim toevoegen**: een gerecht, recept of foto van een briefje wordt een boodschappenlijst; *Wat vergeet ik?* vult aan.
 - Werkt offline (Firestore-cache) en heeft een lichte, speelse stijl met een eigen kleur per lijst.
 
+## Webversie
+
+Elke push naar `main` zet de app ook online als website: **https://sandervgelderen-ship-it.github.io/samenlijst/** (workflow *Webversie (GitHub Pages)*). Op je telefoon kun je hem via *Toevoegen aan beginscherm* als app gebruiken.
+
+De webversie heeft geen eigen server nodig: de AI loopt via **Firebase AI Logic** in hetzelfde Firebase-project, zodat er geen sleutel in de site staat. Eenmalig instellen:
+
+1. Firebase-console › **AI Logic** › *Get started* › kies **Gemini Developer API**.
+2. Authentication › Settings › *Authorized domains*: voeg `sandervgelderen-ship-it.github.io` toe (voor inloggen met Google).
+3. Firestore-regels publiceren (zie hieronder).
+4. Repo › Settings › Pages › *Source*: **GitHub Actions** (als de workflow dat niet zelf kon aanzetten).
+
 ## Lokaal draaien
 
 **Nodig:** Node.js 22

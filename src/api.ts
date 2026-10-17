@@ -6,6 +6,9 @@
 import { Capacitor } from '@capacitor/core';
 import { S, setS } from './store/useStore';
 
+/** Web version without a server: AI goes through Firebase AI Logic instead of /api. */
+export const AI_VIA_FIREBASE = import.meta.env.VITE_AI_MODE === 'firebase';
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
@@ -18,6 +21,21 @@ export function apiBase(): string {
 }
 
 export async function post<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  if (AI_VIA_FIREBASE && !S().apiUrl.trim()) {
+    try {
+      const { runLocal } = await import('./ai/firebaseAi');
+      const out = await runLocal(path, body);
+      if (signal?.aborted) throw new DOMException('Gestopt', 'AbortError');
+      return out as T;
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e;
+      console.warn(e);
+      const msg = String((e as Error).message || '');
+      if (/429|quota|exhaust/i.test(msg)) throw new ApiError('Even te veel verzoeken. Probeer het over een minuut opnieuw.', 429);
+      if (/not.*enabled|has not been used|PERMISSION_DENIED|api-not-enabled|403/i.test(msg)) throw new ApiError('Firebase AI Logic staat nog niet aan voor dit project. Zet het aan in de Firebase-console.', 403);
+      throw new ApiError('De AI gaf geen antwoord. Probeer het opnieuw.', 0);
+    }
+  }
   const base = apiBase();
   if (!base) throw new ApiError('Er is geen server ingesteld. Vul het serveradres in bij Huishouden › Server.', 0);
   let res: Response;
@@ -40,6 +58,7 @@ export async function post<T = unknown>(path: string, body: unknown, signal?: Ab
 
 /** Ask the server whether AI is configured; the smart buttons only show when it is. */
 export async function checkAi() {
+  if (AI_VIA_FIREBASE && !S().apiUrl.trim()) { setS({ aiOn: true }); return; }
   const base = apiBase();
   if (!base) { setS({ aiOn: false }); return; }
   try {
