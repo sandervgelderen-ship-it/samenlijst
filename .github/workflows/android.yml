@@ -35,18 +35,24 @@ jobs:
           # Zet dit onder Settings > Secrets and variables > Actions > Variables als SAMENLIJST_API_URL.
           VITE_API_URL: ${{ vars.SAMENLIJST_API_URL }}
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      # The Android SDK is preinstalled on GitHub's Ubuntu runners (ANDROID_HOME).
+      - name: Android SDK controleren
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools" | tail -n 8
+          echo "sdk.dir=$ANDROID_HOME" > /tmp/local.properties
 
       - name: Android-project voorbereiden
         run: |
           if [ ! -d android ]; then npx cap add android; fi
           node scripts/android-permissions.cjs
           npx cap sync android
+          cp /tmp/local.properties android/local.properties
 
       - name: APK bouwen
         run: |
