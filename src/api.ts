@@ -33,7 +33,8 @@ export async function post<T = unknown>(path: string, body: unknown, signal?: Ab
       const msg = String((e as Error).message || '');
       if (/429|quota|exhaust/i.test(msg)) throw new ApiError('Even te veel verzoeken. Probeer het over een minuut opnieuw.', 429);
       if (/not.*enabled|has not been used|PERMISSION_DENIED|api-not-enabled|403/i.test(msg)) throw new ApiError('Firebase AI Logic staat nog niet aan voor dit project. Zet het aan in de Firebase-console.', 403);
-      throw new ApiError('De AI gaf geen antwoord. Probeer het opnieuw.', 0);
+      const detail = msg.replace(/^FirebaseError:\s*/i, '').replace(/^AI:\s*/i, '').slice(0, 140);
+      throw new ApiError(`De AI gaf geen antwoord${detail ? ` (${detail})` : ''}. Probeer het opnieuw.`, 0);
     }
   }
   const base = apiBase();

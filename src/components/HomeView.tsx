@@ -80,7 +80,7 @@ function ListCard({ list: l }: { list: List }) {
           {shopper && ` · ${shopper.by === me ? 'Jij doet' : first(shopper.by) + ' doet'} nu boodschappen`}
         </span>
       </span>
-      <span className="ring" aria-label={`${open} open van ${its.length}`}>
+      <span className="progress-ring" aria-label={`${open} open van ${its.length}`}>
         <svg viewBox="0 0 52 52">
           <circle cx="26" cy="26" r="21" style={{ fill: 'var(--surface)', stroke: 'color-mix(in srgb, var(--lc-fg) 18%, var(--surface))', strokeWidth: 6 }} />
           <circle cx="26" cy="26" r="21" style={{ fill: 'none', stroke: 'var(--lc-fg)', strokeWidth: 6, strokeLinecap: 'round', strokeDasharray: `${(C * frac).toFixed(1)} ${C.toFixed(1)}`, opacity: frac ? 1 : 0 }} />

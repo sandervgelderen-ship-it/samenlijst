@@ -10,14 +10,30 @@ import {
   analyzePrompt, elaboratePrompt, forgotPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
 } from '../server/prompts';
 
-const MODEL = 'gemini-2.5-flash';
-let model: ReturnType<typeof getGenerativeModel> | null = null;
-function getModel() {
-  if (!model) {
+// Newest stable model first; older ones only if a model is not available for this project.
+const MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'];
+let modelIndex = 0;
+const models = new Map<string, ReturnType<typeof getGenerativeModel>>();
+function getModel(name: string) {
+  let m = models.get(name);
+  if (!m) {
     const ai = getAI(app, { backend: new GoogleAIBackend() });
-    model = getGenerativeModel(ai, { model: MODEL, generationConfig: { responseMimeType: 'application/json' } });
+    m = getGenerativeModel(ai, { model: name, generationConfig: { responseMimeType: 'application/json' } });
+    models.set(name, m);
   }
-  return model;
+  return m;
+}
+const modelMissing = (e: unknown) => /404|not found|is not supported|no longer available|retired|deprecated/i.test(String((e as Error)?.message || e));
+
+async function generate(parts: (string | { inlineData: { mimeType: string; data: string } })[]) {
+  for (;;) {
+    try {
+      return await getModel(MODELS[modelIndex]).generateContent(parts);
+    } catch (e) {
+      if (modelMissing(e) && modelIndex < MODELS.length - 1) { modelIndex++; continue; }
+      throw e;
+    }
+  }
 }
 
 // Without a response schema, each prompt ends with the exact JSON shape we parse.
@@ -64,7 +80,7 @@ export async function runLocal(path: string, body: any): Promise<unknown> {
   const text = `${prompt}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet van toepassing is):\n${shape}`;
   const parts: (string | { inlineData: { mimeType: string; data: string } })[] = [text];
   if (attachment) parts.push(attachment);
-  const result = await getModel().generateContent(parts);
+  const result = await generate(parts);
   const out = result.response.text().trim();
   try { return JSON.parse(out); }
   catch {

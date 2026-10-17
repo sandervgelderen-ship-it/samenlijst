@@ -3,7 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 // ─── Model Name Constants ────────────────────────────────────────────────────
 // Update in one place whenever Google releases new model versions (same as Moestuin).
 /** Default text / multimodal model. */
-export const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash';
+export const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.8-flash';
 // ─────────────────────────────────────────────────────────────────────────────
 
 let aiClient: GoogleGenAI | null = null;
