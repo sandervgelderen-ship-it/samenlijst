@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit",
     "test": "tsx scripts/test-domain.ts",
     "android:sync": "vite build && npx cap sync android",
-    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug"
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "gcp-build": "npm run build"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
