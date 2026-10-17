@@ -13,6 +13,8 @@ export default function ListView({ list: l }: { list: List }) {
   const readOnly = useStore(s => s.readOnly);
   const aiOn = useStore(s => s.aiOn);
   const onlyMine = useStore(s => s.onlyMine);
+  const analyzing = useStore(s => s.analyzing);
+  const ghosts = analyzing.filter(g => g.listId === l.id);
   const me = useStore(s => s.user?.uid);
   const { first } = useNames();
 
@@ -53,6 +55,16 @@ export default function ListView({ list: l }: { list: List }) {
           <button className="chip ai" onClick={() => setS({ sheet: { kind: 'smart', mode: 'add', listId: l.id } })}><Sparkles size={15} /> Plan iets groots</button>
         )}
       </div>
+
+      {ghosts.length > 0 && (
+        <div className="items ghosts">
+          {ghosts.map(g => (
+            <div className="item ghost" key={g.pid}>
+              <div className="toggle"><span className="box" /><span className="txt"><span className="t">{g.text}</span><span className="sub"><span className="dots" aria-hidden="true" />Gemini analyseert…</span></span></div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {!its.length ? (
         <div className="empty">

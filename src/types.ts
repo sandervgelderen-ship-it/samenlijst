@@ -82,12 +82,16 @@ export type RouteWhy = 'kb' | 'rule' | 'ai' | 'user' | 'explicit' | 'dup' | 'onl
 
 export interface Entry {
   pid: string;
+  /** What was literally typed (without @lijst), so the knowledge base can learn it too. */
+  raw: string;
   qty: string;
   text: string;
   due: string | null;
   hasDate: boolean;
   key: string;
   explicit: string | null;
+  note: string;
+  cat: CatId | null;
 }
 
 export interface Pending extends Entry {

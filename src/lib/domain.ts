@@ -60,6 +60,14 @@ export function guessCat(text: string): CatId {
   return best || 'overig';
 }
 
+/** Aisle for an item: one someone set in the knowledge base wins, then the AI's aisle, then the keyword guess. */
+export function pickCat(text: string, kb: Map<string, KbEntry>, aiCat?: CatId | null): CatId {
+  const e = kb.get(kbKey(text));
+  if (e && isCat(e.cat)) return e.cat;
+  if (aiCat && isCat(aiCat) && aiCat !== 'overig') return aiCat;
+  return guessCat(text);
+}
+
 /** Aisle for an item: an aisle someone set in the knowledge base wins over the keyword guess. */
 export function catFor(text: string, kb: Map<string, KbEntry>): CatId {
   const e = kb.get(kbKey(text));
@@ -163,7 +171,7 @@ export function prepEntry(part: string, lists: List[], now = new Date()): Entry 
   }
   const pe = parseEntry(s);
   const pd = parseDue(pe.text, now);
-  return { pid: `p${Date.now().toString(36)}${pidSeq++}`, qty: pe.qty, text: cap(pd.text), due: pd.due, hasDate: !!pd.due, key: kbKey(pd.text), explicit };
+  return { pid: `p${Date.now().toString(36)}${pidSeq++}`, raw: s, qty: pe.qty, text: cap(pd.text), due: pd.due, hasDate: !!pd.due, key: kbKey(pd.text), explicit, note: '', cat: null };
 }
 
 export interface RouteResult { listId: string | null; ranking: string[]; guess?: string | null; why: RouteWhy }

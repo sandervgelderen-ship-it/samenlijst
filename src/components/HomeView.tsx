@@ -49,7 +49,7 @@ export default function HomeView() {
       <details className="tip" open={tipOpen} onToggle={e => setS({ tipOpen: (e.target as HTMLDetailsElement).open })}>
         <summary>Zo werkt Samenlijst</summary>
         <ol>
-          <li>Typ onderaan alles door elkaar, gescheiden door komma's: <em>melk, batterijen, tandarts bellen vrijdag</em>. Samenlijst zet het op de juiste lijst; een datum gaat mee naar de taak.</li>
+          <li>Typ onderaan alles door elkaar, gescheiden door komma's: <em>melk, batterijen, tandarts bellen vrijdag</em>. Gemini analyseert elk item eerst: nette naam, aantal, afdeling, datum en op welke lijst het hoort.</li>
           <li>Of tik op de microfoon en spreek een memo in. Gemini schrijft het uit en verdeelt het over de lijsten.</li>
           <li>Twijfelt hij, dan vraagt hij het. Elke keuze en elke verplaatsing komt in de kennisbank, dus hij hoeft het daarna niet meer te vragen.</li>
           <li>Wil je zelf kiezen? Zet <em>@lijstnaam</em> erachter, bijvoorbeeld <em>schroeven @klussen</em>.</li>
@@ -115,14 +115,15 @@ function NewList({ hasLists }: { hasLists: boolean }) {
 function QuickPanel() {
   const pending = useStore(s => s.pending);
   const receipt = useStore(s => s.receipt);
-  const thinking = useStore(s => s.qaThinking);
+  const analyzing = useStore(s => s.analyzing);
+  const ghosts = analyzing.filter(g => !g.listId);
   const listening = useStore(s => s.listening);
   const heard = useStore(s => s.heard);
   const lists = useStore(s => s.lists);
   const items = useStore(s => s.items);
   const asks = pending.filter(p => p.ranking.some(id => lists.some(l => l.id === id)));
   const rec = receipt.filter(r => items.some(i => i.id === r.itemId) && lists.some(l => l.id === r.listId));
-  if (!asks.length && !rec.length && !thinking && !listening && !heard) return null;
+  if (!asks.length && !rec.length && !ghosts.length && !listening && !heard) return null;
   const nameOf = (id: string) => lists.find(l => l.id === id)?.name || '';
   return (
     <div className="qa">
@@ -146,7 +147,7 @@ function QuickPanel() {
           </div>
         );
       })}
-      {(rec.length > 0 || thinking > 0 || listening || heard) && (
+      {(rec.length > 0 || ghosts.length > 0 || listening || heard) && (
         <section className="receipt">
           <div className="rh">
             <span>{listening ? 'Ik luister naar je memo…' : 'Net toegevoegd'}</span>
@@ -168,11 +169,12 @@ function QuickPanel() {
               </div>
             );
           })}
-          {(thinking > 0 || listening) && (
-            <div className="thinkrow"><span className="dots" aria-hidden="true" />
-              {listening ? 'Gemini schrijft je memo uit…' : `Gemini zoekt uit waar ${thinking === 1 ? '1 item hoort' : thinking + ' items horen'}…`}
+          {ghosts.map(g => (
+            <div className="rrow ghost" key={g.pid}>
+              <span className="txt"><span className="t">{g.text}</span><span className="src"><span className="dots" aria-hidden="true" />Gemini analyseert…</span></span>
             </div>
-          )}
+          ))}
+          {listening && <div className="thinkrow"><span className="dots" aria-hidden="true" />Gemini schrijft je memo uit…</div>}
         </section>
       )}
     </div>

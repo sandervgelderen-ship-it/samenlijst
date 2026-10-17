@@ -70,3 +70,22 @@ export function cleanAisles(data: unknown): Record<number, CatId> {
   }
   return out;
 }
+
+export interface Analysis { text: string; qty: string; note: string; cat: CatId | null; due: string | null; list: string | null; confidence: number }
+
+/** Per typed line (by index) the cleaned-up items the AI made of it; "melk en eieren" gives two. */
+export function cleanAnalysis(data: unknown, count: number): Record<number, Analysis[]> {
+  const out: Record<number, Analysis[]> = {};
+  for (const raw of arr(data)) {
+    const r = obj(raw); if (!r) continue;
+    const i = Number(r.i); if (!Number.isInteger(i) || i < 0 || i >= count) continue;
+    const text = cap(str(r.text, 120)); if (!text) continue;
+    const list = (out[i] ||= []);
+    if (list.length >= 6) continue;
+    list.push({
+      text, qty: str(r.qty, 24), note: str(r.note, 140), cat: isCat(r.cat) ? r.cat : null, due: isoDate(r.due),
+      list: typeof r.list === 'string' && r.list ? r.list : null, confidence: Math.max(0, Math.min(1, Number(r.confidence) || 0)),
+    });
+  }
+  return out;
+}

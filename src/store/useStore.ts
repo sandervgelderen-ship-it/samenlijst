@@ -58,6 +58,8 @@ interface State {
   tipOpen: boolean;
   recording: boolean;
   listening: boolean;
+  /** Entries the AI is analysing right now (listId null = quick add on the home screen). */
+  analyzing: { pid: string; text: string; listId: string | null }[];
   heard: string | null;
 
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void;
@@ -97,6 +99,7 @@ export const useStore = create<State>()((set) => ({
   tipOpen: false,
   recording: false,
   listening: false,
+  analyzing: [],
   heard: null,
 
   set: (patch) => set(patch as any),

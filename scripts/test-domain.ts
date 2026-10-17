@@ -1,6 +1,7 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
 import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, learnEntry, kbKey } from '../src/lib/domain';
+import { cleanAnalysis } from '../src/lib/aiClean';
 import type { Item, KbEntry, List } from '../src/types';
 
 const now = new Date('2026-10-17T09:00:00'); // a Saturday
@@ -42,6 +43,16 @@ t('na leren: variant via fuzzy', () => assert.equal(r('schroeven 4mm', three).li
 const corrected = learnEntry(kb.get('schroeven'), 'Schroeven', 'bood', { weight: 2, from: 'klus', by: 'u1', listIds: new Set(three.map(l => l.id)) })!;
 t('correctie verschuift gewicht', () => assert.deepEqual(corrected.lists, { bood: 2 }));
 t('kbKey', () => assert.equal(kbKey('Crème  fraîche!'), 'creme fraiche'));
+
+const an = cleanAnalysis([
+  { i: 0, text: 'halfvolle melk', qty: '2 pak', cat: 'zuivel', due: '', list: 'bood', confidence: 0.9 },
+  { i: 0, text: 'Eieren', qty: '', cat: 'zuivel', due: '', list: 'bood', confidence: 0.9 },
+  { i: 1, text: 'Kapper bellen', due: '2026-10-23', cat: '', list: 'todo', confidence: 1.4 },
+  { i: 7, text: 'buiten bereik' }, { i: 1, text: '' },
+], 2);
+t('analyse: splitsen en hoofdletter', () => assert.deepEqual(an[0].map(a => a.text), ['Halfvolle melk', 'Eieren']));
+t('analyse: datum en lege afdeling', () => assert.deepEqual([an[1][0].due, an[1][0].cat, an[1][0].confidence], ['2026-10-23', null, 1]));
+t('analyse: onzin weg', () => assert.equal(Object.keys(an).length, 2));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');

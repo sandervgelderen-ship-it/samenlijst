@@ -6,6 +6,7 @@ Gedeelde boodschappen- en takenlijsten voor het hele huishouden. Gebouwd op deze
 
 - **Huishoudens**: iedereen in een huishouden ziet dezelfde lijsten, live. Nodig huisgenoten uit met een code van 6 tekens.
 - **Snel toevoegen** op het beginscherm: typ alles door elkaar (`melk, batterijen, tandarts bellen vrijdag`) en elk item gaat naar de juiste lijst. Twijfelt de app, dan vraagt hij het.
+- **Eerst AI-analyse**: elk nieuw item gaat eerst langs Gemini: nette naam (spelfouten verbeterd), aantal, merk of detail, afdeling, datum, en "melk en eieren" wordt twee items. Wat jullie de kennisbank leerden, beslist mee. Zonder AI werkt toevoegen gewoon met de regels.
 - **Spraakmemo**: tik op de microfoon, spreek in wat er nodig is; Gemini schrijft het uit en verdeelt het over de lijsten.
 - **Kennisbank**: elke keuze, verplaatsing en aangepaste afdeling wordt onthouden en gedeeld, zodat snel toevoegen steeds beter wordt.
 - **Boodschappen per afdeling**, met aantallen (`2 pak melk`), recente items en *Ik ga boodschappen doen*.
@@ -47,7 +48,8 @@ In de Firebase-console moeten **E-mail/wachtwoord** en **Google** aan staan onde
 | Route | Doel |
 |---|---|
 | `GET /api/health` | staat Gemini aan? |
-| `POST /api/route-items` | op welke lijst hoort een item waar de kennisbank over twijfelt |
+| `POST /api/analyze` | elk nieuw item eerst: nette naam, aantal, afdeling, datum, splitsen en welke lijst |
+| `POST /api/route-items` | (oud) alleen de lijst kiezen |
 | `POST /api/voice-memo` | spraakmemo uitschrijven en opsplitsen in items |
 | `POST /api/smart-add` | gerecht, recept, plan of foto naar items |
 | `POST /api/forgot` | wat vergeet ik? |

@@ -4,9 +4,9 @@
  */
 import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { post } from '../api';
-import { cleanAisles, cleanPlan, cleanRoutes, cleanShop, cleanTodo, type Suggestion } from '../lib/aiClean';
+import { cleanAisles, cleanAnalysis, cleanPlan, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
 import {
-  catFor, colorOf, COLORS, guessCat, kbKey, learnEntry, parseDue, parseEntry, prepEntry, route, splitEntries, todayISO, todayLong, CATS,
+  CAT_LABEL, catFor, colorOf, COLORS, guessCat, kbKey, learnEntry, parseDue, parseEntry, pickCat, prepEntry, route, splitEntries, todayISO, todayLong, CATS,
 } from '../lib/domain';
 import { S, setS } from '../store/useStore';
 import type { CatId, Entry, Item, List, ListKind, Pending, Receipt, RouteWhy } from '../types';
@@ -38,7 +38,7 @@ export function forget(key: string) {
 /* ---------- Items ---------- */
 export type AddResult = { id: string; status: 'new' | 'dup' | 'revived' } | null;
 
-export function addItem(listId: string, raw: string, opts: { due?: string | null; quiet?: boolean; weight?: number } = {}): AddResult {
+export function addItem(listId: string, raw: string, opts: { due?: string | null; quiet?: boolean; weight?: number; note?: string; cat?: CatId | null } = {}): AddResult {
   const list = listById(listId); if (!list || !raw.trim()) return null;
   let { text, qty } = parseEntry(raw);
   let due = opts.due || null;
@@ -60,7 +60,7 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
   }
   const id = newId('items');
   const body: Omit<Item, 'id'> = {
-    listId, text, qty, note: '', cat: list.kind === 'shop' ? catFor(text, S().kb) : null,
+    listId, text, qty, note: String(opts.note || '').slice(0, 140), cat: list.kind === 'shop' ? pickCat(text, S().kb, opts.cat) : null,
     done: false, doneBy: null, doneAt: null, urgent: false, due: list.kind === 'todo' ? due : null, assignee: null,
     addedBy: me(), createdAt: Date.now(),
   };
@@ -190,8 +190,10 @@ export function go(view: string) {
 /* ---------- Quick add: one box for every list ---------- */
 function place(p: Entry, listId: string, why: RouteWhy, weight: number): Receipt | null {
   const l = listById(listId); if (!l) return null;
-  const r = addItem(listId, (p.qty ? p.qty + ' ' : '') + p.text, { due: l.kind === 'todo' ? p.due : null, quiet: true, weight });
+  const r = addItem(listId, (p.qty ? p.qty + ' ' : '') + p.text, { due: l.kind === 'todo' ? p.due : null, quiet: true, weight, note: p.note, cat: p.cat });
   if (!r) return null;
+  // Also remember what was literally typed, so the same words route straight away next time.
+  if (p.raw && r.status !== 'dup' && kbKey(p.raw) !== kbKey(p.text)) learn(p.raw, listId, { weight });
   return { itemId: r.id, listId, why: r.status === 'dup' ? 'dup' : why };
 }
 const pushReceipt = (rs: Receipt[]) =>
@@ -201,39 +203,89 @@ export function quickAdd(raw: string) {
   return quickAddEntries(splitEntries(raw).map(part => prepEntry(part, S().lists)));
 }
 
-export async function quickAddEntries(entries: Entry[]) {
-  if (!S().lists.length) { toast('Maak eerst een lijst, dan weet Samenlijst waar dingen heen kunnen.'); return; }
-  const placed: Receipt[] = [], unsure: Pending[] = [];
-  for (const p of entries) {
-    if (!p.key) continue;
-    const r = route(p, S().lists, S().items, S().kb);
-    if (r.listId) { const x = place(p, r.listId, r.why, 1); if (x) placed.push(x); }
-    else unsure.push({ ...p, ranking: r.ranking, guess: r.guess || null, guessBy: r.guess ? 'rule' : null });
-  }
-  pushReceipt(placed);
-  window.scrollTo(0, 0);
-  if (!unsure.length) return;
-  if (!S().aiOn) { setS({ pending: [...S().pending, ...unsure] }); return; }
+/* ---------- Every new item is analysed by AI first ----------
+ * Gemini cleans up the name, pulls out amount, date and details, picks the aisle,
+ * splits "melk en eieren" and proposes a list. What the household taught the
+ * knowledge base (choices and corrections) still decides the list when it knows.
+ * Without AI, or when it fails, the local rules take over: adding never blocks. */
+function ruleRoute(p: Entry, placed: Receipt[], unsure: Pending[]) {
+  const r = route(p, S().lists, S().items, S().kb);
+  if (r.listId) { const x = place(p, r.listId, r.why, 1); if (x) placed.push(x); }
+  else unsure.push({ ...p, ranking: r.ranking, guess: r.guess || null, guessBy: r.guess ? 'rule' : null });
+}
 
-  setS({ qaThinking: S().qaThinking + unsure.length });
-  let routes: ReturnType<typeof cleanRoutes> | null = null;
+async function analyze(entries: Entry[], fixedList: string | null): Promise<Record<number, Analysis[]> | null> {
+  const ghosts = entries.map(p => ({ pid: p.pid, text: p.raw || p.text, listId: fixedList }));
+  setS({ analyzing: [...S().analyzing, ...ghosts] });
   try {
     const lists = S().lists.map(l => ({ id: l.id, name: l.name, kind: l.kind, examples: listExamples(l.id) }));
-    routes = cleanRoutes(await post('route-items', { lists, items: unsure.map(p => ({ text: p.text, due: p.due })), today: todayLong() }));
-  } catch (e) { toast((e as Error).message); }
-  setS({ qaThinking: Math.max(0, S().qaThinking - unsure.length) });
-  const late: Receipt[] = [], still: Pending[] = [];
+    const data = await post('analyze', { lists, fixedList, learned: kbHints(), items: entries.map(p => p.raw || p.text), today: todayLong() });
+    return cleanAnalysis(data, entries.length);
+  } catch (e) {
+    toast((e as Error).message);
+    return null;
+  } finally {
+    setS({ analyzing: S().analyzing.filter(g => !ghosts.includes(g)) });
+  }
+}
+
+export async function quickAddEntries(entries: Entry[], opts: { analyzed?: boolean } = {}) {
+  if (!S().lists.length) { toast('Maak eerst een lijst, dan weet Samenlijst waar dingen heen kunnen.'); return; }
+  entries = entries.filter(p => p.key);
+  if (!entries.length) return;
+  const placed: Receipt[] = [], unsure: Pending[] = [];
+  const res = S().aiOn && !opts.analyzed ? (window.scrollTo(0, 0), await analyze(entries, null)) : null;
   const has = (id: string | null): id is string => !!id && S().lists.some(l => l.id === id);
-  unsure.forEach((p, n) => {
-    const a = routes?.[n];
-    if (a && has(a.list) && a.confidence >= 0.8) { const x = place(p, a.list, 'ai', 1); if (x) late.push(x); }
-    else {
-      if (a && has(a.list)) { p.guess = a.list; p.guessBy = 'ai'; p.ranking = [a.list, ...p.ranking.filter(id => id !== a.list)]; }
-      still.push(p);
-    }
+  entries.forEach((part, n) => {
+    const outs = res?.[n];
+    if (!outs?.length) { ruleRoute(part, placed, unsure); return; }
+    outs.forEach((o, k) => {
+      const text = o.text || part.text, due = o.due || part.due;
+      const p: Entry = { ...part, pid: `${part.pid}-${k}`, text, qty: o.qty || part.qty, due, hasDate: !!due, key: kbKey(text), note: o.note, cat: o.cat };
+      if (has(part.explicit)) { const x = place(p, part.explicit, 'explicit', 1); if (x) placed.push(x); return; }
+      const r = route(p, S().lists, S().items, S().kb);
+      const aiList = has(o.list) ? o.list : null;
+      if (r.listId && (r.why === 'kb' || r.why === 'dup' || r.why === 'only')) { const x = place(p, r.listId, r.why, 1); if (x) placed.push(x); }
+      else if (aiList && o.confidence >= 0.75) { const x = place(p, aiList, 'ai', 1); if (x) placed.push(x); }
+      else if (r.listId) { const x = place(p, r.listId, r.why, 1); if (x) placed.push(x); }
+      else {
+        const ranking = aiList ? [aiList, ...r.ranking.filter(id => id !== aiList)] : r.ranking;
+        unsure.push({ ...p, ranking, guess: aiList || r.guess || null, guessBy: aiList ? 'ai' : r.guess ? 'rule' : null });
+      }
+    });
   });
-  pushReceipt(late);
-  setS({ pending: [...S().pending, ...still] });
+  pushReceipt(placed);
+  if (unsure.length) setS({ pending: [...S().pending, ...unsure] });
+  window.scrollTo(0, 0);
+}
+
+/** Adding inside a list: the list is chosen, the AI still cleans up each entry first. */
+export async function listAdd(listId: string, raw: string) {
+  const entries = splitEntries(raw).map(part => prepEntry(part, S().lists)).filter(p => p.key);
+  if (!entries.length) return;
+  const res = S().aiOn ? await analyze(entries, listId) : null;
+  if (!listById(listId)) return;
+  entries.forEach((part, n) => {
+    const outs = res?.[n];
+    if (!outs?.length) { addItem(listId, (part.qty ? part.qty + ' ' : '') + part.text, { due: part.due }); return; }
+    outs.forEach(o => {
+      const text = o.text || part.text, qty = o.qty || part.qty;
+      const r = addItem(listId, (qty ? qty + ' ' : '') + text, { due: o.due || part.due, note: o.note, cat: o.cat });
+      if (r && r.status !== 'dup' && kbKey(part.raw) !== kbKey(text)) learn(part.raw, listId);
+    });
+  });
+}
+
+/** Recent choices the household made, so the AI follows them. */
+function kbHints(): string[] {
+  const out: string[] = [];
+  for (const e of [...S().kb.values()].sort((a, b) => (b.at || 0) - (a.at || 0))) {
+    const best = Object.entries(e.lists || {}).filter(([id]) => listById(id)).sort((a, b) => b[1] - a[1])[0];
+    if (!best && !e.cat) continue;
+    out.push(`${e.text}${best ? ' → ' + listById(best[0])!.name : ''}${e.cat ? ' (' + CAT_LABEL[e.cat] + ')' : ''}`);
+    if (out.length >= 40) break;
+  }
+  return out;
 }
 
 function listExamples(id: string) {

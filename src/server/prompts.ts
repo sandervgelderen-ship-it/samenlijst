@@ -5,6 +5,28 @@ export const CAT_PROMPT = CATS.map(c => `"${c[0]}" = ${c[1]}`).join('; ');
 const s = (v: unknown, n: number) => String(v ?? '').slice(0, n);
 const list = (v: unknown, max: number) => (Array.isArray(v) ? v : []).slice(0, max).map(x => s(x, 140)).join(', ') || 'niets';
 
+export function analyzePrompt(b: any) {
+  const lists = (Array.isArray(b.lists) ? b.lists : []).slice(0, 20);
+  const items = (Array.isArray(b.items) ? b.items : []).slice(0, 25);
+  const fixed = lists.find((l: any) => l.id === b.fixedList);
+  return `Je analyseert nieuwe items voor de gedeelde lijsten van een Nederlands huishouden. Vandaag is het ${s(b.today, 60)}.
+Lijsten:
+${lists.map((l: any) => `- id "${s(l.id, 60)}": "${s(l.name, 60)}" (${l.kind === 'shop' ? 'boodschappenlijst' : 'takenlijst'}). Staat er doorgaans op: ${list(l.examples, 18)}`).join('\n')}
+${fixed ? `Alles komt op de lijst "${s(fixed.name, 60)}" (id "${s(fixed.id, 60)}"); kies dus die lijst.\n` : ''}Wat dit huishouden eerder koos (volg dit): ${list(b.learned, 40)}.
+
+Ingetypte items (nummer: tekst):
+${items.map((t: unknown, n: number) => `${n}: ${s(t, 200)}`).join('\n')}
+
+Analyseer elk item:
+- "text": nette Nederlandse naam met hoofdletter, spelfouten verbeterd, zonder aantal of datum. Bij taken kort en duidelijk wat er moet gebeuren.
+- "qty": de hoeveelheid als die genoemd is (bijv. "2 pak", "500 g"), anders een lege string.
+- "note": merk, winkel of ander detail dat genoemd werd, anders een lege string.
+- "cat": bij boodschappen de afdeling-id (${CAT_PROMPT}); bij taken een lege string.
+- "due": datum JJJJ-MM-DD als er een moment genoemd is, anders een lege string.
+- "list": id van de lijst waar het hoort; "confidence" tussen 0 en 1, hoog alleen als het duidelijk is.
+Noemt één regel meerdere dingen ("melk en eieren"), geef dan per ding een object met hetzelfde "i". Verzin niets wat niet genoemd is.`;
+}
+
 export function routePrompt(b: any) {
   const lists = (Array.isArray(b.lists) ? b.lists : []).slice(0, 20);
   const items = (Array.isArray(b.items) ? b.items : []).slice(0, 25);
@@ -87,6 +109,14 @@ export const SHOP_SCHEMA = {
 export const TODO_SCHEMA = {
   type: 'ARRAY',
   items: { type: 'OBJECT', properties: { text: STR, due: STR, note: STR }, required: ['text'] },
+};
+export const ANALYZE_SCHEMA = {
+  type: 'ARRAY',
+  items: {
+    type: 'OBJECT',
+    properties: { i: { type: 'INTEGER' }, text: STR, qty: STR, note: STR, cat: STR, due: STR, list: STR, confidence: { type: 'NUMBER' } },
+    required: ['i', 'text', 'list', 'confidence'],
+  },
 };
 export const ROUTE_SCHEMA = {
   type: 'ARRAY',

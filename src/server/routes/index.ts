@@ -5,5 +5,5 @@ export const apiRouter = Router();
 
 // Route map (all paths relative to /api):
 //   GET  /health
-//   POST /route-items, /smart-add, /forgot, /sort-aisles, /elaborate, /voice-memo
+//   POST /analyze, /route-items, /smart-add, /forgot, /sort-aisles, /elaborate, /voice-memo
 apiRouter.use('/', aiRouter);

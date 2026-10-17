@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { aiConfigured, generateJSON } from '../services/genai';
 import {
-  elaboratePrompt, forgotPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
-  PLAN_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
+  analyzePrompt, elaboratePrompt, forgotPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+  ANALYZE_SCHEMA, PLAN_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
 } from '../prompts';
 
 export const aiRouter = Router();
@@ -13,7 +13,12 @@ aiRouter.get('/health', (_req, res) => {
   res.json({ ok: true, ai: aiConfigured() });
 });
 
-/** Quick add: which list does each unsure item belong on? */
+/** Every new item first: clean name, amount, aisle, date, split, and which list. */
+aiRouter.post('/analyze', asyncHandler(async (req, res) => {
+  res.json(await generateJSON(analyzePrompt(req.body || {}), ANALYZE_SCHEMA));
+}));
+
+/** Older clients: which list does each unsure item belong on? */
 aiRouter.post('/route-items', asyncHandler(async (req, res) => {
   res.json(await generateJSON(routePrompt(req.body || {}), ROUTE_SCHEMA));
 }));

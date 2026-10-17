@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Clock, Mic, Plus, Send, Sparkles, X } from 'lucide-react';
 import { COMMON, kbKey, parseDue, parseEntry, splitEntries } from '../lib/domain';
-import { addItem, quickAdd, quickPick, voiceMemo } from '../data/actions';
+import { addItem, listAdd, quickAdd, quickPick, voiceMemo } from '../data/actions';
 import { toast } from '../data/toast';
 import { setS, useStore } from '../store/useStore';
 import type { List } from '../types';
@@ -26,7 +26,7 @@ export default function AddBar({ list }: { list?: List }) {
     e.preventDefault();
     const v = value.trim(); if (!v) return;
     setValue('');
-    if (home) quickAdd(v); else addItem(list!.id, v);
+    if (home) quickAdd(v); else listAdd(list!.id, v);
     inputRef.current?.focus();
   }
 

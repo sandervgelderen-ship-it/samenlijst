@@ -390,6 +390,13 @@ textarea.field { resize: vertical; min-height: 88px; color: var(--ink); line-hei
 @media (max-width: 420px) { .kbstats b { font-size: 1.2rem; } .listcard { grid-template-columns: 44px 1fr auto; gap: 12px; } .kindmark { width: 44px; height: 44px; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
+/* Being analysed */
+.ghost { opacity: .7; }
+.ghost .t { font-style: italic; }
+.ghost .dots { width: 22px; height: 8px; background-size: 8px 8px; background-image: radial-gradient(circle, var(--c-druif-fg) 2.6px, transparent 3px); }
+.items.ghosts { margin-top: 14px; }
+.ghost .src { color: var(--c-druif-fg); font-weight: 700; }
+
 /* Spraakmemo */
 .addbtn.mic { background: var(--c-druif-fg); }
 .addbtn:disabled { opacity: .5; }
