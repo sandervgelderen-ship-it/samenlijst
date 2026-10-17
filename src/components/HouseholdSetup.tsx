@@ -4,6 +4,13 @@ import { createHousehold, joinHousehold } from '../data/repo';
 import { useStore } from '../store/useStore';
 import { Logo } from './bits';
 
+function explain(e: unknown, fallback: string) {
+  const code = (e as { code?: string })?.code || '';
+  if (code === 'permission-denied') return 'Firebase weigert het opslaan: de beveiligingsregels van Samenlijst staan nog niet in Firebase (Firestore › Rules).';
+  if (code === 'unavailable') return 'Geen verbinding met Firebase. Controleer je internet.';
+  return (e as Error)?.message && !code ? (e as Error).message : fallback;
+}
+
 /** First run after logging in: start a household or join one with a code. */
 export default function HouseholdSetup() {
   const user = useStore(s => s.user);
@@ -14,11 +21,11 @@ export default function HouseholdSetup() {
 
   async function create(e: FormEvent) {
     e.preventDefault(); setErr(''); setBusy('new');
-    try { await createHousehold(name.trim() || 'Ons huis'); } catch (e2) { console.warn(e2); setErr('Aanmaken lukte niet. Controleer je verbinding.'); } finally { setBusy(''); }
+    try { await createHousehold(name.trim() || 'Ons huis'); } catch (e2) { console.warn(e2); setErr(explain(e2, 'Aanmaken lukte niet. Probeer het opnieuw.')); } finally { setBusy(''); }
   }
   async function join(e: FormEvent) {
     e.preventDefault(); setErr(''); setBusy('join');
-    try { await joinHousehold(code); } catch (e2) { setErr((e2 as Error).message || 'Meedoen lukte niet.'); } finally { setBusy(''); }
+    try { await joinHousehold(code); } catch (e2) { console.warn(e2); setErr(explain(e2, 'Meedoen lukte niet. Probeer het opnieuw.')); } finally { setBusy(''); }
   }
 
   return (
