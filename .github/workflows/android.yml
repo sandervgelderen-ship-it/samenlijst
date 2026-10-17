@@ -48,11 +48,29 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > /tmp/local.properties
 
       - name: Android-project voorbereiden
+        env:
+          # Inhoud van google-services.json uit de Firebase-console (Android-app com.samenlijst.app).
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           if [ ! -d android ]; then npx cap add android; fi
-          node scripts/android-permissions.cjs
+          node scripts/android-setup.cjs
           npx cap sync android
           cp /tmp/local.properties android/local.properties
+
+      - name: Vaste ondertekensleutel plaatsen
+        env:
+          # Base64 van de debug-keystore. Zonder vaste sleutel krijgt elke build een andere
+          # SHA-1 en weigert Google het inloggen.
+          ANDROID_DEBUG_KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        run: |
+          mkdir -p ~/.android
+          if [ -n "$ANDROID_DEBUG_KEYSTORE" ]; then
+            echo "$ANDROID_DEBUG_KEYSTORE" | base64 -d > ~/.android/debug.keystore
+            echo "Vaste sleutel gebruikt. SHA-1:"
+            keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android | grep SHA1
+          else
+            echo "::warning::Geen ANDROID_DEBUG_KEYSTORE-secret: inloggen met Google werkt niet in deze APK."
+          fi
 
       - name: APK bouwen
         run: |

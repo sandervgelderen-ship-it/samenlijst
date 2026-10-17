@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebase';
+import { logOut } from '../auth';
 import { createHousehold, joinHousehold } from '../data/repo';
 import { useStore } from '../store/useStore';
 import { Logo } from './bits';
@@ -40,7 +39,7 @@ export default function HouseholdSetup() {
           <input className="field" id="hh-code" value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="Bijv. K7MP2Q" maxLength={8} autoCapitalize="characters" style={{ letterSpacing: '.15em', fontWeight: 700 }} />
           <button className="btn ghost wide" type="submit" disabled={!!busy || code.trim().length < 6}>{busy === 'join' ? 'Bezig…' : 'Doe mee'}</button>
         </form>
-        <button className="linkbtn" type="button" onClick={() => signOut(auth)}>Uitloggen ({user?.email})</button>
+        <button className="linkbtn" type="button" onClick={() => logOut()}>Uitloggen ({user?.email})</button>
       </div>
     </div>
   );

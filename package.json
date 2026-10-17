@@ -10,11 +10,12 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "tsx scripts/test-domain.ts",
-    "android:sync": "vite build && npx cap sync android",
+    "android:sync": "vite build && node scripts/android-setup.cjs && npx cap sync android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "gcp-build": "npm run build"
   },
   "dependencies": {
+    "@capacitor-firebase/authentication": "^8.0.0",
     "@capacitor/android": "^8.4.1",
     "@capacitor/cli": "^8.4.1",
     "@capacitor/core": "^8.4.1",

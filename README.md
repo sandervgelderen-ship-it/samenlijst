@@ -67,7 +67,16 @@ Elke push naar `main` draait de workflow **Build en APK** (`.github/workflows/an
 
 De Android-app heeft geen eigen server. Zet het adres van je server onder *Settings › Secrets and variables › Actions › Variables* als `SAMENLIJST_API_URL` (bijvoorbeeld `https://samenlijst-xyz.run.app/api`), of vul het in de app in bij *Huishouden › Server*.
 
-Zelf bouwen kan ook (Android SDK nodig): `npx cap add android` (eenmalig), `node scripts/android-permissions.cjs`, daarna `npm run android:apk`.
+### Inloggen met Google in de Android-app
+
+De app gebruikt het Google-account van de telefoon (`@capacitor-firebase/authentication`) en logt daarna in bij Firebase. Daarvoor:
+
+1. Firebase-console › Projectinstellingen › *App toevoegen* › Android, pakketnaam `com.samenlijst.app`, en de **SHA-1** van de ondertekensleutel.
+2. Download `google-services.json` en zet de inhoud als repository secret `GOOGLE_SERVICES_JSON`.
+3. Zet de base64-tekst van de keystore als secret `ANDROID_DEBUG_KEYSTORE`, zodat elke build dezelfde SHA-1 heeft.
+4. Authentication › Sign-in method › **Google** aan.
+
+Zelf bouwen kan ook (Android SDK nodig): `npx cap add android` (eenmalig), daarna `npm run android:apk`.
 
 ## Code-indeling
 

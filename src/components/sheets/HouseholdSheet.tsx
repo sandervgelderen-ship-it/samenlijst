@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { signOut } from 'firebase/auth';
 import { Copy, Users } from 'lucide-react';
-import { auth } from '../../firebase';
+import { logOut } from '../../auth';
 import { setApiUrl } from '../../api';
 import { createHousehold, joinHousehold, leaveHousehold, renameHousehold, renewInviteCode, selectHousehold } from '../../data/repo';
 import { toast } from '../../data/toast';
@@ -103,7 +102,7 @@ export default function HouseholdSheet() {
           {armed ? 'Tik nogmaals om te verlaten' : 'Huishouden verlaten'}
         </button>
         <span style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="btn ghost" onClick={() => signOut(auth)}>Uitloggen</button>
+          <button type="button" className="btn ghost" onClick={() => logOut()}>Uitloggen</button>
           <button type="button" className="btn" onClick={closeSheet}>Klaar</button>
         </span>
       </div>
