@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'createdAt']) &&
+        data.email is string && data.email.size() <= 256 &&
+        data.createdAt is timestamp &&
+        (
+          !('displayName' in data.keys()) ||
+          (data.displayName is string && data.displayName.size() <= 100)
+        ) &&
+        (
+          !('photoURL' in data.keys()) ||
+          (data.photoURL is string && data.photoURL.size() <= 1000)
+        ) &&
+        (
+          !('updatedAt' in data.keys()) ||
+           data.updatedAt is timestamp
+        );
+    }
+
+    // ── User profile document ──────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        isValidUser(incoming()) &&
+        incoming().createdAt == request.time;
+
+      allow update: if isOwner(userId) &&
+        isValidUser(incoming()) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']);
+
+      // ── Plants sub-collection ──────────────────────────────────────────
+      match /plants/{plantId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ── Plots sub-collection ───────────────────────────────────────────
+      match /plots/{plotId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ── Seed bank sub-collection ───────────────────────────────────────
+      match /seedBank/{seedId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ── Seedling trays sub-collection ──────────────────────────────────
+      match /seedlingTrays/{trayId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // ── Config sub-collection (mapConfig, soilOverrides) ───────────────
+      match /config/{configId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  
+    // ════════════════════════════════════════════════════════════════════════
+    // Samenlijst (shared lists). Same Firebase project as Moestuin, so these
+    // rules live in one file: deploying it from either repo keeps both apps working.
+    // ════════════════════════════════════════════════════════════════════════
+    function slHousehold(hid) {
+      return get(/databases/$(database)/documents/samenlijstHouseholds/$(hid)).data;
+    }
+    function slHouseholdAfter(hid) {
+      return getAfter(/databases/$(database)/documents/samenlijstHouseholds/$(hid)).data;
+    }
+    function slIsMember(hid) {
+      return isSignedIn() && request.auth.uid in slHousehold(hid).members;
+    }
+    function slIsMemberAfter(hid) {
+      return isSignedIn() && request.auth.uid in slHouseholdAfter(hid).members;
+    }
+
+    match /samenlijstHouseholds/{hid} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.members;
+
+      allow create: if isSignedIn() &&
+        incoming().members == [request.auth.uid] &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().inviteCode is string && incoming().inviteCode.size() >= 6 &&
+        incoming().name is string && incoming().name.size() <= 60;
+
+      // Members: rename, renew the invite code, update member info, or leave (remove only themselves).
+      allow update: if isSignedIn() &&
+        request.auth.uid in existing().members &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().name is string && incoming().name.size() <= 60 &&
+        (
+          incoming().members == existing().members ||
+          incoming().members == existing().members.removeAll([request.auth.uid])
+        );
+
+      // Joining: someone outside may add only themselves, and only with the current invite code.
+      allow update: if isSignedIn() &&
+        !(request.auth.uid in existing().members) &&
+        incoming().joinCode == existing().inviteCode &&
+        incoming().members == existing().members.concat([request.auth.uid]) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['members', 'memberInfo', 'joinCode']);
+
+      allow delete: if isSignedIn() && existing().createdBy == request.auth.uid;
+
+      match /lists/{docId} {
+        allow read: if slIsMember(hid);
+        allow write: if slIsMemberAfter(hid);
+      }
+      match /items/{docId} {
+        allow read: if slIsMember(hid);
+        allow write: if slIsMemberAfter(hid);
+      }
+      match /kb/{docId} {
+        allow read: if slIsMember(hid);
+        allow write: if slIsMemberAfter(hid);
+      }
+    }
+
+    // Invite codes: anyone signed in may look up one code (never list them all).
+    match /samenlijstInvites/{code} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && incoming().code == code && slIsMemberAfter(incoming().hid);
+      allow delete: if isSignedIn() && slIsMember(existing().hid);
+    }
+}
+}
