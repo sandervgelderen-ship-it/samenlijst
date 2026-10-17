@@ -21,6 +21,10 @@ export default function AddBar({ list }: { list?: List }) {
   const home = !list;
 
   useEffect(() => { setValue(''); }, [list?.id]);
+  // Home-screen shortcut "Snel toevoegen" opens the app with ?add: put the cursor in the box.
+  useEffect(() => {
+    if (/[?&]add\b/.test(location.search)) { inputRef.current?.focus(); history.replaceState(history.state, '', location.pathname); }
+  }, []);
 
   function submit(e: FormEvent) {
     e.preventDefault();

@@ -17,7 +17,7 @@ Gedeelde boodschappen- en takenlijsten voor het hele huishouden. Gebouwd op deze
 
 ## Webversie
 
-Elke push naar `main` zet de app ook online als website: **https://sandervgelderen-ship-it.github.io/samenlijst/** (workflow *Webversie (GitHub Pages)*). Op je telefoon kun je hem via *Toevoegen aan beginscherm* als app gebruiken.
+Elke push naar `main` zet de app ook online als website: **https://sandervgelderen-ship-it.github.io/samenlijst/** (workflow *Webversie (GitHub Pages)*). Het is een installeerbare web-app (PWA): de app toont zelf een knop **Installeren** (Chrome, Brave, Edge op Android en desktop) of legt op iPhone uit hoe je hem via *Deel › Zet op beginscherm* toevoegt. Een service worker (`public/sw.js`) zorgt dat hij direct en ook offline opent.
 
 De webversie heeft geen eigen server nodig: de AI loopt via **Firebase AI Logic** in hetzelfde Firebase-project, zodat er geen sleutel in de site staat. Eenmalig instellen:
 

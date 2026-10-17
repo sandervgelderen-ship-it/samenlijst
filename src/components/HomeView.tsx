@@ -5,6 +5,7 @@ import { answerPending, createList, go, moveItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
 import type { List } from '../types';
 import { Doodle, useNames } from './bits';
+import InstallPrompt from './InstallPrompt';
 
 const WHY: Record<string, string> = { kb: 'geleerd', rule: 'herkend', ai: 'Gemini', user: 'jouw keuze', explicit: 'via @', dup: 'stond er al op', only: '' };
 const lcVars = (l: List) => { const c = colorOf(l); return { ['--lc-bg' as string]: `var(--c-${c}-bg)`, ['--lc-fg' as string]: `var(--c-${c}-fg)` }; };
@@ -36,6 +37,7 @@ export default function HomeView() {
         </p>
       </div>
 
+      <InstallPrompt />
       {!readOnly && <QuickPanel />}
 
       <div className="eyerow">

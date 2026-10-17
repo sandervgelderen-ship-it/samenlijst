@@ -7,6 +7,7 @@ import { createHousehold, joinHousehold, leaveHousehold, renameHousehold, renewI
 import { toast } from '../../data/toast';
 import { useStore } from '../../store/useStore';
 import { Avatar, useHousehold, useNames } from '../bits';
+import { useInstall } from '../InstallPrompt';
 import { Sheet, closeSheet } from './Sheets';
 
 export default function HouseholdSheet() {
@@ -22,6 +23,7 @@ export default function HouseholdSheet() {
   const [server, setServer] = useState(apiUrl);
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const inst = useInstall();
   if (!h || !user) return null;
 
   async function copy() {
@@ -93,6 +95,15 @@ export default function HouseholdSheet() {
             </div>
           </div>
         </details>
+      )}
+
+      {!inst.installed && (inst.canPrompt || inst.ios) && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <span className="lbl2">App</span>
+          {inst.canPrompt
+            ? <button type="button" className="chip" style={{ width: 'fit-content' }} onClick={() => inst.install()}>Installeer Samenlijst op dit apparaat</button>
+            : <p className="note">Op iPhone: tik in Safari op Deel en kies Zet op beginscherm.</p>}
+        </div>
       )}
 
       <p className="note">Ingelogd als {user.email || user.name}. Dit is hetzelfde account als in Moestuin.</p>
