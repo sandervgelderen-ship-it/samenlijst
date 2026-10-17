@@ -37,9 +37,8 @@ jobs:
           # Geen eigen server: de AI loopt via Firebase AI Logic in hetzelfde Firebase-project.
           VITE_AI_MODE: firebase
 
+      # Pages staat aan (Settings › Pages › Source: GitHub Actions).
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
