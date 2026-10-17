@@ -8,7 +8,7 @@
  */
 import { onAuthStateChanged } from 'firebase/auth';
 import {
-  arrayUnion, collection, deleteDoc, doc, getDoc, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
+  arrayUnion, collection, deleteDoc, doc, getDoc, getDocFromServer, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -25,6 +25,44 @@ export const listRef = (id: string) => doc(col('lists'), id);
 export const itemRef = (id: string) => doc(col('items'), id);
 export const kbRef = (id: string) => doc(col('kb'), id);
 export const newId = (name: 'lists' | 'items' | 'kb') => doc(col(name)).id;
+
+const codeOf = (e: unknown) => (e as { code?: string })?.code || '';
+
+/**
+ * Run a write. When Firebase refuses it, refresh the login token and try once more
+ * (an expired session looks the same as a refusal), then work out why and say so.
+ */
+export async function safeWrite(op: () => Promise<unknown>) {
+  try { await op(); return; } catch (e) {
+    if (codeOf(e) !== 'permission-denied') { failed(e); return; }
+  }
+  try { await auth.currentUser?.getIdToken(true); } catch { setS({ access: 'session' }); return; }
+  try { await op(); setS({ access: null }); return; } catch (e) {
+    if (codeOf(e) !== 'permission-denied') { failed(e); return; }
+  }
+  await diagnose();
+}
+
+let diagnosing = false;
+/** Firebase said no: is the login stale, are we no longer a member, or are the rules missing? */
+export async function diagnose() {
+  const u = auth.currentUser, hid = S().hid;
+  if (diagnosing || !u) return;
+  diagnosing = true;
+  try {
+    try { await u.getIdToken(true); } catch { setS({ access: 'session' }); return; }
+    if (!hid) return;
+    try {
+      const snap = await getDocFromServer(hRef(hid));
+      const members = (snap.exists() && (snap.data().members as string[])) || [];
+      if (!members.includes(u.uid)) { toast('Je hoort niet meer bij dit huishouden.'); return; }
+      setS({ access: 'rules' });
+    } catch (e) {
+      if (codeOf(e) === 'permission-denied') setS({ access: 'rules' });
+    }
+  } finally { diagnosing = false; }
+}
+const onListenError = (e: unknown) => { console.warn(e); if (codeOf(e) === 'permission-denied') void diagnose(); };
 
 /** Report a failed write in plain words. Firestore keeps unsent writes offline and retries them. */
 export function failed(err: unknown) {
@@ -59,7 +97,7 @@ export function startAuth() {
       const changed = hid !== S().hid || !unsubData.length;
       setS({ households, householdsLoaded: true });
       if (changed) selectHousehold(hid);
-    }, (e) => { console.warn(e); setS({ householdsLoaded: true }); });
+    }, (e) => { setS({ householdsLoaded: true }); onListenError(e); });
   });
 }
 
@@ -75,15 +113,16 @@ export function selectHousehold(hid: string | null) {
   if (!hid) return;
   unsubData.push(onSnapshot(col('lists', hid), (snap) => {
     setS({ lists: snap.docs.map(d => ({ id: d.id, ...d.data() } as List)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)), listsLoaded: true });
-  }, (e) => { console.warn(e); setS({ listsLoaded: true }); }));
+  }, (e) => { setS({ listsLoaded: true }); onListenError(e); }));
   unsubData.push(onSnapshot(col('items', hid), (snap) => {
     setS({ items: snap.docs.map(d => ({ id: d.id, ...d.data() } as Item)) });
-  }, (e) => console.warn(e)));
+    if (!snap.metadata.fromCache && S().access === 'rules') setS({ access: null });
+  }, onListenError));
   unsubData.push(onSnapshot(col('kb', hid), (snap) => {
     const kb = new Map<string, KbEntry>();
     snap.docs.forEach(d => { const v = d.data() as KbEntry; if (v && typeof v.key === 'string' && v.key) kb.set(v.key, { ...v, id: d.id }); });
     setS({ kb });
-  }, (e) => console.warn(e)));
+  }, onListenError));
 }
 
 /* ---------- Creating, joining and leaving ---------- */

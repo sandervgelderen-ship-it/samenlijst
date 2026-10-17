@@ -42,6 +42,8 @@ interface State {
   kb: Map<string, KbEntry>;
   listsLoaded: boolean;
   readOnly: boolean;
+  /** Firebase refuses access: the login expired ('session') or the security rules are missing ('rules'). */
+  access: null | 'session' | 'rules';
 
   // AI server
   aiOn: boolean;
@@ -89,6 +91,7 @@ export const useStore = create<State>()((set) => ({
   kb: new Map(),
   listsLoaded: false,
   readOnly: false,
+  access: null,
 
   aiOn: false,
   apiUrl: stored('samenlijst.apiUrl'),

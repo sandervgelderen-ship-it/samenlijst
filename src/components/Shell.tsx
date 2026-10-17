@@ -5,10 +5,33 @@ import { go } from '../data/actions';
 import { closeToast } from '../data/toast';
 import { S, setS, useStore } from '../store/useStore';
 import { Logo, useHousehold } from './bits';
+import { logOut } from '../auth';
+import { selectHousehold } from '../data/repo';
 import HomeView from './HomeView';
 import ListView from './ListView';
 import AddBar from './AddBar';
 import Sheets from './sheets/Sheets';
+
+/** Shown when Firebase refuses to save, with what to do about it. */
+function AccessBanner() {
+  const access = useStore(s => s.access);
+  if (!access) return null;
+  if (access === 'session') return (
+    <div className="banner warn" role="alert">
+      <span>Je inlogsessie is verlopen, daardoor wordt niets opgeslagen.</span>
+      <button type="button" onClick={() => { setS({ access: null }); logOut(); }}>Opnieuw inloggen</button>
+    </div>
+  );
+  return (
+    <div className="banner warn" role="alert" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <span style={{ flex: '1 1 220px' }}>
+        <b>Firebase weigert op te slaan.</b> Waarschijnlijk ontbreken de Samenlijst-regels in Firestore,
+        bijvoorbeeld omdat Moestuin opnieuw is gepubliceerd. Zet ze terug via de Firebase-console › Firestore › Regels.
+      </span>
+      <button type="button" onClick={() => { setS({ access: null }); selectHousehold(S().hid); }}>Opnieuw proberen</button>
+    </div>
+  );
+}
 
 export default function Shell() {
   const view = useStore(s => s.view);
@@ -54,6 +77,7 @@ export default function Shell() {
       </header>
       <main className={showBar ? '' : 'home'}>
         <div className="wrap">
+          <AccessBanner />
           {!listsLoaded
             ? <div className="state"><strong>Lijsten laden…</strong>Even geduld.</div>
             : inList ? <ListView list={list!} /> : <HomeView />}

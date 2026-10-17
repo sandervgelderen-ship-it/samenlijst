@@ -10,14 +10,14 @@ import {
 } from '../lib/domain';
 import { S, setS } from '../store/useStore';
 import type { CatId, Entry, Item, List, ListKind, PlanAnswer, Pending, Receipt, RouteWhy } from '../types';
-import { failed, itemRef, kbRef, listRef, newId } from './repo';
+import { failed, itemRef, kbRef, listRef, newId, safeWrite } from './repo';
 import { toast } from './toast';
 import { confetti } from '../lib/confetti';
 
 const me = () => S().user?.uid || null;
 const listById = (id: string) => S().lists.find(l => l.id === id);
 export const listItems = (listId: string) => S().items.filter(i => i.listId === listId);
-const write = (p: Promise<unknown>) => { p.catch(failed); };
+const write = (op: () => Promise<unknown>) => { void safeWrite(op); };
 
 /* ---------- Knowledge base ---------- */
 export function learn(text: string, listId: string | null, opts: { weight?: number; from?: string | null; cat?: CatId | null } = {}) {
@@ -27,12 +27,12 @@ export function learn(text: string, listId: string | null, opts: { weight?: numb
   if (!next) return;
   const { id, ...body } = next;
   const kb = new Map(S().kb); kb.set(next.key, next); setS({ kb });
-  write(setDoc(kbRef(id), body));
+  write(() => setDoc(kbRef(id), body));
 }
 export function forget(key: string) {
   const e = S().kb.get(key); if (!e) return;
   const kb = new Map(S().kb); kb.delete(key); setS({ kb });
-  write(deleteDoc(kbRef(e.id)));
+  write(() => deleteDoc(kbRef(e.id)));
 }
 
 /* ---------- Items ---------- */
@@ -47,7 +47,7 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
   const same = listItems(listId).find(i => kbKey(i.text) === key);
   if (same && !same.done) {
     if (!opts.quiet) { setS({ flashId: same.id }); toast(`${text} staat al op de lijst`); }
-    if (qty && qty !== same.qty) write(updateDoc(itemRef(same.id), { qty }));
+    if (qty && qty !== same.qty) write(() => updateDoc(itemRef(same.id), { qty }));
     return { id: same.id, status: 'dup' };
   }
   learn(text, listId, { weight: opts.weight || 1 });
@@ -55,7 +55,7 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
     const patch: Partial<Item> = { done: false, doneBy: null, doneAt: null, addedBy: me(), createdAt: Date.now() };
     if (qty) patch.qty = qty;
     if (due && list.kind === 'todo') patch.due = due;
-    write(updateDoc(itemRef(same.id), patch));
+    write(() => updateDoc(itemRef(same.id), patch));
     return { id: same.id, status: 'revived' };
   }
   const id = newId('items');
@@ -64,7 +64,7 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
     done: false, doneBy: null, doneAt: null, urgent: false, due: list.kind === 'todo' ? due : null, assignee: null,
     addedBy: me(), createdAt: Date.now(),
   };
-  write(setDoc(itemRef(id), body));
+  write(() => setDoc(itemRef(id), body));
   if (list.kind === 'todo' && list.autoPlan !== false && S().aiOn) queuePlan(id, false, body.text);
   return { id, status: 'new' };
 }
@@ -72,7 +72,7 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
 export function toggleItem(id: string, origin?: { x: number; y: number }) {
   const it = S().items.find(i => i.id === id); if (!it) return;
   const done = !it.done;
-  write(updateDoc(itemRef(id), { done, doneBy: done ? me() : null, doneAt: done ? Date.now() : null }));
+  write(() => updateDoc(itemRef(id), { done, doneBy: done ? me() : null, doneAt: done ? Date.now() : null }));
   if (done) setS({ popId: id });
   const others = listItems(it.listId).filter(i => i.id !== id);
   if (done && others.length >= 1 && others.every(i => i.done)) {
@@ -82,23 +82,23 @@ export function toggleItem(id: string, origin?: { x: number; y: number }) {
 }
 
 export function updateItem(id: string, patch: Partial<Item>) {
-  write(updateDoc(itemRef(id), patch));
+  write(() => updateDoc(itemRef(id), patch));
 }
 
 function rememberRecent(listId: string, texts: string[]) {
   const list = listById(listId); if (!list) return;
   const seen = new Set<string>(), recent: string[] = [];
   for (const t of [...texts, ...(list.recent || [])]) { const k = kbKey(t); if (!seen.has(k)) { seen.add(k); recent.push(t); } }
-  write(updateDoc(listRef(listId), { recent: recent.slice(0, 40) }));
+  write(() => updateDoc(listRef(listId), { recent: recent.slice(0, 40) }));
 }
 
 export function deleteItems(ids: string[], msg: string) {
   const backups = ids.map(id => S().items.find(i => i.id === id)).filter((x): x is Item => !!x);
   if (!backups.length) return;
   rememberRecent(backups[0].listId, backups.map(b => b.text));
-  backups.forEach(b => write(deleteDoc(itemRef(b.id))));
+  backups.forEach(b => write(() => deleteDoc(itemRef(b.id))));
   toast(msg, 'Ongedaan maken', () => {
-    backups.forEach(({ id, ...body }) => write(setDoc(itemRef(id), body)));
+    backups.forEach(({ id, ...body }) => write(() => setDoc(itemRef(id), body)));
   });
 }
 
@@ -110,12 +110,12 @@ export function moveItem(itemId: string, toId: string) {
   const twin = listItems(toId).find(i => !i.done && i.id !== itemId && kbKey(i.text) === kbKey(it.text));
   setS({ receipt: S().receipt.map(r => r.itemId === itemId ? { ...r, listId: toId, why: 'user' as RouteWhy, itemId: twin ? twin.id : r.itemId } : r) });
   if (twin) {
-    write(deleteDoc(itemRef(itemId)));
+    write(() => deleteDoc(itemRef(itemId)));
     toast(`${it.text} stond al op ${to.name}`);
   } else {
     const patch: Partial<Item> = { listId: toId, cat: to.kind === 'shop' ? catFor(it.text, S().kb) : null };
     if (to.kind !== 'todo') { patch.due = null; patch.assignee = null; }
-    write(updateDoc(itemRef(itemId), patch));
+    write(() => updateDoc(itemRef(itemId), patch));
     toast(`Verplaatst naar ${to.name}. Onthouden voor de volgende keer.`);
   }
 }
@@ -130,7 +130,7 @@ export function addMany(listId: string, entries: Pick<Suggestion, 'text' | 'qty'
     if (same && same.done) {
       const patch: Partial<Item> = { done: false, doneBy: null, doneAt: null, addedBy: me(), createdAt: t0 + n };
       if (e.qty) patch.qty = e.qty;
-      write(updateDoc(itemRef(same.id), patch)); revived++;
+      write(() => updateDoc(itemRef(same.id), patch)); revived++;
       return;
     }
     const id = newId('items');
@@ -140,13 +140,13 @@ export function addMany(listId: string, entries: Pick<Suggestion, 'text' | 'qty'
       done: false, doneBy: null, doneAt: null, urgent: false, due: list.kind === 'todo' ? (e.due || null) : null, assignee: null,
       addedBy: me(), createdAt: t0 + n,
     };
-    write(setDoc(itemRef(id), body)); created.push(id);
+    write(() => setDoc(itemRef(id), body)); created.push(id);
     learn(e.text, listId, { cat: list.kind === 'shop' && e.cat && e.cat !== guessCat(e.text) ? e.cat : null });
   });
   const n = created.length + revived;
   if (!n) { toast('Alles stond al op de lijst'); return; }
   toast(`${n} ${n === 1 ? 'item' : 'items'} toegevoegd`, created.length ? 'Ongedaan maken' : undefined,
-    created.length ? () => created.forEach(id => write(deleteDoc(itemRef(id)))) : undefined);
+    created.length ? () => created.forEach(id => write(() => deleteDoc(itemRef(id)))) : undefined);
 }
 
 /* ---------- Lists ---------- */
@@ -154,23 +154,23 @@ export function createList(name: string, kind: ListKind) {
   const used = new Set(S().lists.map(colorOf));
   const color = COLORS.find(c => !used.has(c)) || COLORS[S().lists.length % COLORS.length];
   const id = newId('lists');
-  write(setDoc(listRef(id), { name: name.slice(0, 60), kind, color, recent: [], shopper: null, autoPlan: kind === 'todo', createdBy: me(), createdAt: Date.now() }));
+  write(() => setDoc(listRef(id), { name: name.slice(0, 60), kind, color, recent: [], shopper: null, autoPlan: kind === 'todo', createdBy: me(), createdAt: Date.now() }));
   setS({ showNew: false });
   go(id);
 }
 export function updateList(id: string, patch: Partial<List>) {
-  write(updateDoc(listRef(id), patch));
-  if (patch.kind === 'shop') listItems(id).filter(i => !i.cat).forEach(i => write(updateDoc(itemRef(i.id), { cat: catFor(i.text, S().kb) })));
+  write(() => updateDoc(listRef(id), patch));
+  if (patch.kind === 'shop') listItems(id).filter(i => !i.cat).forEach(i => write(() => updateDoc(itemRef(i.id), { cat: catFor(i.text, S().kb) })));
 }
 export function deleteList(id: string) {
-  listItems(id).forEach(i => write(deleteDoc(itemRef(i.id))));
-  write(deleteDoc(listRef(id)));
+  listItems(id).forEach(i => write(() => deleteDoc(itemRef(i.id))));
+  write(() => deleteDoc(listRef(id)));
   setS({ sheet: null });
   go('home');
   toast('Lijst verwijderd');
 }
 export function setShopper(listId: string, on: boolean) {
-  write(updateDoc(listRef(listId), { shopper: on ? { by: me(), at: Date.now() } : null }));
+  write(() => updateDoc(listRef(listId), { shopper: on ? { by: me(), at: Date.now() } : null }));
   if (on) toast('De anderen zien nu dat je boodschappen doet');
 }
 
@@ -368,7 +368,7 @@ export async function sortOverig(listId: string) {
     let moved = 0;
     items.forEach((i, n) => {
       const c = map[n];
-      if (c && c !== 'overig') { moved++; write(updateDoc(itemRef(i.id), { cat: c })); learn(i.text, null, { cat: c }); }
+      if (c && c !== 'overig') { moved++; write(() => updateDoc(itemRef(i.id), { cat: c })); learn(i.text, null, { cat: c }); }
     });
     toast(moved ? `${moved} ${moved === 1 ? 'item' : 'items'} naar de juiste afdeling` : 'Deze items horen echt bij Overig');
   } catch (e) { toast((e as Error).message); }
@@ -451,7 +451,7 @@ async function askQuestions(id: string, fallbackText?: string, force = false) {
       if (chosen.length) picks[qi] = chosen;
     });
     setS({ qaSel: { ...S().qaSel, [id]: { picks, extra: '' } }, planOpen: [...S().planOpen.filter(x => x !== id), id] });
-    write(updateDoc(itemRef(id), { planQ: { questions, at: Date.now(), by: me() } }));
+    write(() => updateDoc(itemRef(id), { planQ: { questions, at: Date.now(), by: me() } }));
   } catch (e) { toast((e as Error).message); }
 }
 async function makePlan(id: string, answers: PlanAnswer[], extra: string, open = false) {
@@ -464,27 +464,27 @@ async function makePlan(id: string, answers: PlanAnswer[], extra: string, open =
     const { [id]: _, ...qaSel } = S().qaSel;
     // Worked out on its own: stays folded behind the chip. Asked for or answered: show it.
     setS({ qaSel, planOpen: open ? [...S().planOpen.filter(x => x !== id), id] : S().planOpen.filter(x => x !== id) });
-    write(updateDoc(itemRef(id), { plan, planQ: null }));
+    write(() => updateDoc(itemRef(id), { plan, planQ: null }));
   } catch (e) { toast((e as Error).message); }
 }
 /** Drop a worked-out plan (or open questions) the household does not want. */
 export function removePlan(id: string) {
   setS({ planOpen: S().planOpen.filter(x => x !== id) });
-  write(updateDoc(itemRef(id), { plan: null, planQ: null }));
+  write(() => updateDoc(itemRef(id), { plan: null, planQ: null }));
 }
 export function planAddSteps(id: string) {
   const it = S().items.find(i => i.id === id); if (!it?.plan) return;
   const steps = it.plan.steps.map(st => ({ text: st.text, qty: '', note: '', cat: null, due: st.due || null }));
   if (!steps.length) return;
   addMany(it.listId, steps, `Onderdeel van: ${it.text}`.slice(0, 140));
-  write(updateDoc(itemRef(id), { 'plan.stepsAdded': true }));
+  write(() => updateDoc(itemRef(id), { 'plan.stepsAdded': true }));
 }
 export function planAddBuy(id: string, listId: string) {
   const it = S().items.find(i => i.id === id); if (!it?.plan) return;
   const buy = it.plan.buy.map(b => ({ text: b.text, qty: b.qty || '', note: '', cat: null, due: null }));
   if (!buy.length) return;
   addMany(listId, buy, `Voor: ${it.text}`.slice(0, 140));
-  write(updateDoc(itemRef(id), { 'plan.buyAdded': listId }));
+  write(() => updateDoc(itemRef(id), { 'plan.buyAdded': listId }));
 }
 
 export const togglePlanOpen = (id: string) =>
