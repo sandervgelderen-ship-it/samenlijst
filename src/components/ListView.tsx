@@ -1,9 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Check, Pencil, Plus, ShoppingCart, Sparkles } from 'lucide-react';
 import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo } from '../lib/domain';
-import { deleteItems, planAddBuy, planAddSteps, queuePlan, setShopper, sortOverig, togglePlanOpen, toggleItem } from '../data/actions';
+import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
-import type { CatId, Item, List } from '../types';
+import type { CatId, Item, List, PlanQuestions } from '../types';
 import { Avatar, Doodle, useNames } from './bits';
 
 const SHOPPING_FOR = 3 * 3600e3;
@@ -184,11 +184,14 @@ function planLabel(i: Item) {
 /** The worked-out version of a task: what it involves, steps, tips and what to buy. */
 function PlanPart({ item: i }: { item: Item }) {
   const planning = useStore(s => s.planning.includes(i.id));
+  const mode = useStore(s => s.planMode[i.id]);
   const open = useStore(s => s.planOpen.includes(i.id));
   const lists = useStore(s => s.lists);
   const readOnly = useStore(s => s.readOnly);
   const aiOn = useStore(s => s.aiOn);
-  if (planning) return <div className="planline"><span className="dots" aria-hidden="true" />Gemini werkt dit uit…</div>;
+  if (planning) return <div className="planline"><span className="dots" aria-hidden="true" />{mode === 'ask' ? 'Gemini bedenkt een paar vragen…' : 'Gemini werkt dit uit…'}</div>;
+  const pq = i.planQ;
+  if (pq?.questions?.length && (!i.plan || (pq.at || 0) > (i.plan.at || 0))) return <QuestionCard item={i} pq={pq} />;
   const pl = i.plan;
   if (!pl || typeof pl !== 'object') return null;
   const steps = pl.steps || [], tips = pl.tips || [], buy = pl.buy || [];
@@ -202,6 +205,7 @@ function PlanPart({ item: i }: { item: Item }) {
       {open && (
         <div className="plan">
           {pl.detail && <p className="pdetail">{pl.detail}</p>}
+          {!!pl.answers?.length && <p className="panswers">Op basis van: {pl.answers.map(a => a.a).join(' · ')}</p>}
           {steps.length > 0 && (
             <div className="psec">
               <h4>Stappen</h4>
@@ -230,5 +234,39 @@ function PlanPart({ item: i }: { item: Item }) {
         </div>
       )}
     </>
+  );
+}
+
+/** Multiple-choice questions about the details, before the plan is made. */
+function QuestionCard({ item: i, pq }: { item: Item; pq: PlanQuestions }) {
+  const sel = useStore(s => s.qaSel[i.id]);
+  const picks = sel?.picks || {};
+  const readOnly = useStore(s => s.readOnly);
+  const answered = pq.questions.filter((_, qi) => (picks[qi] || []).length).length;
+  return (
+    <div className="plan pq">
+      <p className="pdetail"><b>Een paar vragen</b>, zodat Gemini het plan op jullie kan afstemmen.</p>
+      {pq.questions.map((q, qi) => (
+        <div className="psec" key={qi}>
+          <h4>{q.q}{q.multi && <span className="pqmulti">meerdere mogelijk</span>}</h4>
+          <div className="pqopts">
+            {q.options.map((o, oi) => (
+              <button key={oi} className="chip pqo" disabled={readOnly} aria-pressed={(picks[qi] || []).includes(oi)} onClick={() => pickAnswer(i.id, qi, oi)}>{o}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {!readOnly && (
+        <>
+          <label className="lbl2 pqextra">Nog iets dat Gemini moet weten? <span>(mag leeg)</span>
+            <input className="field" id={`pq-extra-${i.id}`} maxLength={200} value={sel?.extra || ''} onChange={e => setExtra(i.id, e.target.value)} placeholder="Bijv. budget, voorkeur, wie er meehelpt" />
+          </label>
+          <div className="pfoot">
+            <button className="linkbtn" onClick={() => submitAnswers(i.id, true)}>Sla vragen over</button>
+            <button className="btn" onClick={() => submitAnswers(i.id, false)}>{answered ? `Werk uit (${answered}/${pq.questions.length})` : 'Werk uit'}</button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

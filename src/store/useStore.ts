@@ -15,6 +15,12 @@ export type Sheet =
   | { kind: 'kb' }
   | { kind: 'household' };
 
+export interface QaSel {
+  /** Per question index, the chosen option indexes. */
+  picks: Record<number, number[]>;
+  extra: string;
+}
+
 export interface Toast {
   id: number;
   msg: string;
@@ -49,6 +55,10 @@ interface State {
   receipt: Receipt[];
   qaThinking: number;
   planning: string[];
+  /** What the AI is doing for a task right now: thinking of questions, or making the plan. */
+  planMode: Record<string, 'ask' | 'plan'>;
+  /** This viewer's picks in the question cards: per task, per question the chosen option indexes; extra = free text. */
+  qaSel: Record<string, QaSel>;
   planOpen: string[];
   popId: string | null;
   flashId: string | null;
@@ -90,6 +100,8 @@ export const useStore = create<State>()((set) => ({
   receipt: [],
   qaThinking: 0,
   planning: [],
+  planMode: {},
+  qaSel: {},
   planOpen: [],
   popId: null,
   flashId: null,

@@ -74,12 +74,30 @@ ${items.map((t: unknown, n: number) => `${n}: ${s(t, 140)}`).join('\n')}
 Geef voor elk nummer ("i") de afdeling-id ("cat").`;
 }
 
-export function elaboratePrompt(b: any) {
+function taskContext(b: any) {
   return `Je helpt een Nederlands huishouden met hun gedeelde takenlijst "${s(b.listName, 60)}". Vandaag is het ${s(b.today, 60)}.
 Taak: "${s(b.task, 200)}"${b.note ? `\nToelichting: ${s(b.note, 300)}` : ''}${b.due ? `\nDeadline: ${s(b.due, 10)}` : ''}
-Andere open taken op de lijst: ${list(b.others, 25)}.
+Andere open taken op de lijst: ${list(b.others, 25)}.`;
+}
 
-Werk deze taak praktisch uit, toegespitst op Nederland:
+export function questionsPrompt(b: any) {
+  return `${taskContext(b)}
+
+Voordat je deze taak uitwerkt: welke details moet je weten om een goed plan te maken dat bij dit huishouden past? Stel 0 tot 4 meerkeuzevragen.
+- Alleen vragen waarvan het antwoord het plan echt verandert, zoals omvang, budget, wie er meedoet, timing of voorkeuren. Niets vragen wat al uit de taak blijkt.
+- Per vraag 2 tot 5 korte antwoordopties die elkaar uitsluiten; voeg waar handig "Weet ik nog niet" toe.
+- Zet "multi" op true als meerdere antwoorden tegelijk kunnen gelden.
+- Is de taak één simpele handeling (bijv. "kapper bellen"), geef dan een lege lijst.`;
+}
+
+export function elaboratePrompt(b: any) {
+  const answers = (Array.isArray(b.answers) ? b.answers : []).slice(0, 6).filter((x: any) => x && x.a);
+  const known = answers.length || b.extra
+    ? `\n\nDit vertelde het huishouden over de details (houd hier rekening mee):\n${answers.map((x: any) => `- ${s(x.q, 140)} ${s(x.a, 200)}`).join('\n')}${b.extra ? `\n- Verder: ${s(b.extra, 200)}` : ''}`
+    : '';
+  return `${taskContext(b)}${known}
+
+Werk deze taak praktisch uit, toegespitst op Nederland en op wat het huishouden vertelde:
 - "detail": één of twee zinnen over wat erbij komt kijken. Concreet, geen open deuren.
 - "steps": 0 tot 8 afvinkbare stappen in logische volgorde, elk kort en beginnend met een werkwoord. Geef een datum ("due", JJJJ-MM-DD) alleen als er een deadline is, en plan dan terug vanaf die deadline; gebruik anders een lege string. Laat "steps" leeg als de taak één simpele handeling is. Herhaal geen andere open taken.
 - "tips": 0 tot 4 nuttige suggesties: wat vaak vergeten wordt, slimme alternatieven, kosten of tijd, wie je erbij kunt betrekken.
@@ -133,6 +151,13 @@ export const VOICE_SCHEMA = {
     items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { text: STR, qty: STR, due: STR }, required: ['text'] } },
   },
   required: ['transcript', 'items'],
+};
+export const QUESTIONS_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    questions: { type: 'ARRAY', items: { type: 'OBJECT', properties: { q: STR, options: { type: 'ARRAY', items: STR }, multi: { type: 'BOOLEAN' } }, required: ['q', 'options'] } },
+  },
+  required: ['questions'],
 };
 export const PLAN_SCHEMA = {
   type: 'OBJECT',

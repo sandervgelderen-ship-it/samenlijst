@@ -38,8 +38,15 @@ export interface List {
 
 export interface PlanStep { text: string; due: string | null }
 export interface PlanBuy { text: string; qty: string }
+export interface PlanQuestion { q: string; options: string[]; multi: boolean }
+export interface PlanAnswer { q: string; a: string }
+/** Multiple-choice questions about the details, asked before a task is worked out. */
+export interface PlanQuestions { questions: PlanQuestion[]; at: number; by: string | null }
+
 export interface Plan {
   detail: string;
+  /** What the household answered; the plan was made with these. */
+  answers?: PlanAnswer[];
   steps: PlanStep[];
   tips: string[];
   buy: PlanBuy[];
@@ -65,6 +72,7 @@ export interface Item {
   addedBy: string | null;
   createdAt: number;
   plan?: Plan | null;
+  planQ?: PlanQuestions | null;
 }
 
 /** One knowledge-base entry: where an item tends to go, and its aisle if someone set it. */

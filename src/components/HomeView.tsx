@@ -53,7 +53,7 @@ export default function HomeView() {
           <li>Of tik op de microfoon en spreek een memo in. Gemini schrijft het uit en verdeelt het over de lijsten.</li>
           <li>Twijfelt hij, dan vraagt hij het. Elke keuze en elke verplaatsing komt in de kennisbank, dus hij hoeft het daarna niet meer te vragen.</li>
           <li>Wil je zelf kiezen? Zet <em>@lijstnaam</em> erachter, bijvoorbeeld <em>schroeven @klussen</em>.</li>
-          <li>Nieuwe taken worden uitgewerkt: stappen, tips en wat je ervoor moet kopen. Tik op <em>Uitgewerkt</em> onder een taak.</li>
+          <li>Nieuwe taken worden uitgewerkt. Eerst stelt Gemini een paar meerkeuzevragen over de details, daarna krijg je stappen, tips en wat je ervoor moet kopen.</li>
           <li>Nodig huisgenoten uit via het poppetje rechtsboven. De kennisbank is gedeeld: wat de één leert, helpt de ander.</li>
         </ol>
       </details>

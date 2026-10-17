@@ -11,7 +11,7 @@ Gedeelde boodschappen- en takenlijsten voor het hele huishouden. Gebouwd op deze
 - **Kennisbank**: elke keuze, verplaatsing en aangepaste afdeling wordt onthouden en gedeeld, zodat snel toevoegen steeds beter wordt.
 - **Boodschappen per afdeling**, met aantallen (`2 pak melk`), recente items en *Ik ga boodschappen doen*.
 - **Taken met datums** in gewoon Nederlands (`morgen`, `vrijdag`, `12 nov`) en iemand die het doet.
-- **Taken uitwerken**: Gemini maakt van een nieuwe taak een toelichting, stappen, tips en een lijst met wat je moet kopen. Met één tik zet je die op de lijsten.
+- **Taken uitwerken**: Gemini stelt eerst een paar meerkeuzevragen over de details (omvang, budget, wie helpt) en maakt daarna van de taak een toelichting, stappen, tips en een lijst met wat je moet kopen. Met één tik zet je die op de lijsten.
 - **Slim toevoegen**: een gerecht, recept of foto van een briefje wordt een boodschappenlijst; *Wat vergeet ik?* vult aan.
 - Werkt offline (Firestore-cache) en heeft een lichte, speelse stijl met een eigen kleur per lijst.
 
@@ -54,7 +54,8 @@ In de Firebase-console moeten **E-mail/wachtwoord** en **Google** aan staan onde
 | `POST /api/smart-add` | gerecht, recept, plan of foto naar items |
 | `POST /api/forgot` | wat vergeet ik? |
 | `POST /api/sort-aisles` | items uit *Overig* bij de juiste afdeling zetten |
-| `POST /api/elaborate` | een taak uitwerken |
+| `POST /api/questions` | meerkeuzevragen over de details van een taak |
+| `POST /api/elaborate` | een taak uitwerken, met de antwoorden |
 
 Alle routes geven gestructureerde JSON terug (Gemini `responseSchema`). De Gemini-sleutel blijft op de server.
 

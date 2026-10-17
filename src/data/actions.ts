@@ -4,12 +4,12 @@
  */
 import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { post } from '../api';
-import { cleanAisles, cleanAnalysis, cleanPlan, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
+import { cleanAisles, cleanAnalysis, cleanPlan, cleanQuestions, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
 import {
   CAT_LABEL, catFor, colorOf, COLORS, guessCat, kbKey, learnEntry, parseDue, parseEntry, pickCat, prepEntry, route, splitEntries, todayISO, todayLong, CATS,
 } from '../lib/domain';
 import { S, setS } from '../store/useStore';
-import type { CatId, Entry, Item, List, ListKind, Pending, Receipt, RouteWhy } from '../types';
+import type { CatId, Entry, Item, List, ListKind, PlanAnswer, Pending, Receipt, RouteWhy } from '../types';
 import { failed, itemRef, kbRef, listRef, newId } from './repo';
 import { toast } from './toast';
 import { confetti } from '../lib/confetti';
@@ -374,41 +374,92 @@ export async function sortOverig(listId: string) {
   } catch (e) { toast((e as Error).message); }
 }
 
-/* ---------- AI: taken uitwerken ---------- */
-const planQueue: { id: string; text?: string }[] = [];
+/* ---------- AI: taken uitwerken (eerst vragen, dan het plan) ---------- */
+type PlanJob = { id: string; mode: 'ask' | 'plan'; text?: string; answers?: PlanAnswer[]; extra?: string };
+const planQueue: PlanJob[] = [];
 let planBusy = false;
 
+function startJob(job: PlanJob) {
+  planQueue.push(job);
+  setS({ planning: [...S().planning.filter(x => x !== job.id), job.id], planMode: { ...S().planMode, [job.id]: job.mode } });
+  runPlanQueue();
+}
 export function queuePlan(id: string, force = false, text?: string) {
   if (!S().aiOn || S().planning.includes(id)) return;
   const it = S().items.find(i => i.id === id);
-  if (it && it.plan && !force) return;
-  planQueue.push({ id, text });
-  setS({ planning: [...S().planning, id] });
-  runPlanQueue();
+  if (it && (it.plan || it.planQ) && !force) return;
+  startJob({ id, mode: 'ask', text });
+}
+/** The household answered the questions (or skipped them): make the plan. */
+export function submitAnswers(id: string, skip: boolean) {
+  const it = S().items.find(i => i.id === id);
+  if (!it || !S().aiOn || S().planning.includes(id)) return;
+  const qs = it.planQ?.questions || [];
+  const sel = S().qaSel[id] || { picks: {}, extra: '' };
+  const answers = skip ? [] : qs.map((q, qi) => ({ q: q.q, a: (sel.picks[qi] || []).map(oi => q.options[oi]).filter(Boolean).join(', ') })).filter(a => a.a);
+  const extra = skip ? '' : sel.extra.trim().slice(0, 200);
+  setS({ planOpen: [...S().planOpen.filter(x => x !== id), id] });
+  startJob({ id, mode: 'plan', answers, extra });
+}
+export function pickAnswer(id: string, qi: number, oi: number) {
+  const q = S().items.find(i => i.id === id)?.planQ?.questions[qi]; if (!q) return;
+  const prev = S().qaSel[id] || { picks: {}, extra: '' };
+  const cur = prev.picks[qi] || [];
+  const next = q.multi ? (cur.includes(oi) ? cur.filter(x => x !== oi) : [...cur, oi]) : (cur.includes(oi) ? [] : [oi]);
+  setS({ qaSel: { ...S().qaSel, [id]: { ...prev, picks: { ...prev.picks, [qi]: next } } } });
+}
+export function setExtra(id: string, extra: string) {
+  const prev = S().qaSel[id] || { picks: {}, extra: '' };
+  setS({ qaSel: { ...S().qaSel, [id]: { ...prev, extra } } });
 }
 async function runPlanQueue() {
   if (planBusy) return; planBusy = true;
   while (planQueue.length) {
     const job = planQueue.shift()!;
-    try { await elaborate(job.id, job.text); } catch (e) { console.warn(e); }
-    setS({ planning: S().planning.filter(x => x !== job.id) });
+    try { job.mode === 'ask' ? await askQuestions(job.id, job.text) : await makePlan(job.id, job.answers || [], job.extra || ''); }
+    catch (e) { console.warn(e); }
+    const { [job.id]: _, ...planMode } = S().planMode;
+    setS({ planning: S().planning.filter(x => x !== job.id), planMode });
   }
   planBusy = false;
 }
-async function elaborate(id: string, fallbackText?: string) {
+async function taskFor(id: string, fallbackText?: string) {
   // A just-created task may not be in the snapshot yet; wait briefly for it.
   let it = S().items.find(i => i.id === id);
   for (let n = 0; !it && n < 20; n++) { await new Promise(r => setTimeout(r, 150)); it = S().items.find(i => i.id === id); }
-  const text = it?.text || fallbackText; if (!text) return;
+  const text = it?.text || fallbackText; if (!text) return null;
   const l = it ? listById(it.listId) : undefined;
   const others = it ? listItems(it.listId).filter(i => !i.done && i.id !== id).map(i => i.text).slice(0, 25) : [];
+  return { listName: l?.name || '', task: text, note: it?.note || '', due: it?.due || null, others, today: todayLong() };
+}
+async function askQuestions(id: string, fallbackText?: string) {
+  const ctx = await taskFor(id, fallbackText); if (!ctx) return;
   try {
-    const data = await post('elaborate', { listName: l?.name || '', task: text, note: it?.note || '', due: it?.due || null, others, today: todayLong() });
+    const questions = cleanQuestions(await post('questions', ctx));
+    const cur = S().items.find(i => i.id === id); if (!cur) return;
+    if (!questions.length) { await makePlan(id, [], ''); return; }
+    // Keep earlier answers where the same question comes back.
+    const prev = cur.plan?.answers || [];
+    const picks: Record<number, number[]> = {};
+    questions.forEach((q, qi) => {
+      const a = prev.find(x => x.q === q.q);
+      const chosen = a ? a.a.split(', ').map(t => q.options.indexOf(t)).filter(n => n >= 0) : [];
+      if (chosen.length) picks[qi] = chosen;
+    });
+    setS({ qaSel: { ...S().qaSel, [id]: { picks, extra: '' } }, planOpen: [...S().planOpen.filter(x => x !== id), id] });
+    write(updateDoc(itemRef(id), { planQ: { questions, at: Date.now(), by: me() } }));
+  } catch (e) { toast((e as Error).message); }
+}
+async function makePlan(id: string, answers: PlanAnswer[], extra: string) {
+  const ctx = await taskFor(id); if (!ctx) return;
+  try {
+    const data = await post('elaborate', { ...ctx, answers, extra });
     if (!S().items.some(i => i.id === id)) return;
-    const plan = cleanPlan(data, me());
+    const plan = cleanPlan(data, me(), extra ? [...answers, { q: 'Verder', a: extra }] : answers);
     if (!plan.detail && !plan.steps.length && !plan.tips.length && !plan.buy.length) return;
-    setS({ planOpen: [...S().planOpen.filter(x => x !== id), id] });
-    write(updateDoc(itemRef(id), { plan }));
+    const { [id]: _, ...qaSel } = S().qaSel;
+    setS({ qaSel, planOpen: [...S().planOpen.filter(x => x !== id), id] });
+    write(updateDoc(itemRef(id), { plan, planQ: null }));
   } catch (e) { toast((e as Error).message); }
 }
 export function planAddSteps(id: string) {

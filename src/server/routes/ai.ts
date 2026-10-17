@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { aiConfigured, generateJSON } from '../services/genai';
 import {
-  analyzePrompt, elaboratePrompt, forgotPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
-  ANALYZE_SCHEMA, PLAN_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
+  analyzePrompt, elaboratePrompt, questionsPrompt, forgotPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+  ANALYZE_SCHEMA, PLAN_SCHEMA, QUESTIONS_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
 } from '../prompts';
 
 export const aiRouter = Router();
@@ -45,7 +45,12 @@ aiRouter.post('/sort-aisles', asyncHandler(async (req, res) => {
   res.json(await generateJSON(sortPrompt(req.body || {}), SORT_SCHEMA));
 }));
 
-/** Werk een taak uit: toelichting, stappen, tips en wat je moet kopen. */
+/** Before working out a task: multiple-choice questions about the details. */
+aiRouter.post('/questions', asyncHandler(async (req, res) => {
+  res.json(await generateJSON(questionsPrompt(req.body || {}), QUESTIONS_SCHEMA));
+}));
+
+/** Werk een taak uit (met de antwoorden): toelichting, stappen, tips en wat je moet kopen. */
 aiRouter.post('/elaborate', asyncHandler(async (req, res) => {
   res.json(await generateJSON(elaboratePrompt(req.body || {}), PLAN_SCHEMA));
 }));

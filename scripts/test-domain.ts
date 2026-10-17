@@ -1,7 +1,7 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
 import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, learnEntry, kbKey } from '../src/lib/domain';
-import { cleanAnalysis } from '../src/lib/aiClean';
+import { cleanAnalysis, cleanQuestions } from '../src/lib/aiClean';
 import type { Item, KbEntry, List } from '../src/types';
 
 const now = new Date('2026-10-17T09:00:00'); // a Saturday
@@ -53,6 +53,16 @@ const an = cleanAnalysis([
 t('analyse: splitsen en hoofdletter', () => assert.deepEqual(an[0].map(a => a.text), ['Halfvolle melk', 'Eieren']));
 t('analyse: datum en lege afdeling', () => assert.deepEqual([an[1][0].due, an[1][0].cat, an[1][0].confidence], ['2026-10-23', null, 1]));
 t('analyse: onzin weg', () => assert.equal(Object.keys(an).length, 2));
+
+const qs = cleanQuestions({ questions: [
+  { q: 'Hoeveel kamers?', options: ['1 of 2', '3 of 4', '3 of 4', '5+'] },
+  { q: 'Wie helpt?', options: ['Familie', 'Vrienden'], multi: true },
+  { q: 'Te weinig', options: ['alleen'] },
+  { question: 'Budget?', options: [{ label: '< 500' }, { text: '500-1000' }] },
+  { q: 'Vijfde', options: ['a', 'b'] }, { q: 'Zesde', options: ['a', 'b'] },
+] });
+t('vragen: dubbele opties weg, max 4', () => assert.deepEqual(qs.map(q => q.options.length), [3, 2, 2, 2]));
+t('vragen: meerdere mogelijk', () => assert.deepEqual(qs.map(q => q.multi), [false, true, false, false]));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');

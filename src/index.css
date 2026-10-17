@@ -390,6 +390,16 @@ textarea.field { resize: vertical; min-height: 88px; color: var(--ink); line-hei
 @media (max-width: 420px) { .kbstats b { font-size: 1.2rem; } .listcard { grid-template-columns: 44px 1fr auto; gap: 12px; } .kindmark { width: 44px; height: 44px; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
+/* Vragen voor het uitwerken */
+.pq { margin-top: 2px; }
+.pqopts { display: flex; gap: 6px; flex-wrap: wrap; }
+.pqopts .chip { box-shadow: var(--press); }
+.pqopts .chip[aria-pressed="true"] { background: var(--c-druif-fg); color: var(--surface); }
+.pqmulti { font-family: var(--font-body); font-weight: 600; font-size: .75rem; color: var(--muted); margin-left: 6px; }
+.pqextra span { font-weight: 500; }
+.pq .pfoot { align-items: center; }
+.panswers { margin: 0; font-size: .85rem; color: var(--c-druif-fg); font-weight: 600; }
+
 /* Being analysed */
 .ghost { opacity: .7; }
 .ghost .t { font-style: italic; }
