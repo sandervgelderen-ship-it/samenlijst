@@ -52,16 +52,16 @@ export function cleanQuestions(d: unknown): PlanQuestion[] {
       .filter(x => { const k = x.toLowerCase(); if (!x || seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
     if (options.length < 2) continue;
     out.push({ q: text, options, multi: q.multi === true });
-    if (out.length >= 4) break;
+    if (out.length >= 3) break;
   }
   return out;
 }
 
 export function cleanPlan(d: unknown, by: string | null, answers: PlanAnswer[] = []): Plan {
   const o = (d && typeof d === 'object' && !Array.isArray(d) ? d : {}) as Record<string, unknown>;
-  const steps = arr(o.steps).map(obj).filter((x): x is Record<string, unknown> => !!x && !!str(x.text, 120)).slice(0, 8)
+  const steps = arr(o.steps).map(obj).filter((x): x is Record<string, unknown> => !!x && !!str(x.text, 120)).slice(0, 5)
     .map(x => ({ text: cap(str(x.text, 120)), due: isoDate(x.due) }));
-  const tips = arr(o.tips).map(t => str(typeof t === 'string' ? t : obj(t)?.text, 220)).filter(Boolean).slice(0, 4);
+  const tips = arr(o.tips).map(t => str(typeof t === 'string' ? t : obj(t)?.text, 220)).filter(Boolean).slice(0, 2);
   const buy = arr(o.buy).map(obj).filter((x): x is Record<string, unknown> => !!x && !!str(x.text, 80)).slice(0, 10)
     .map(x => ({ text: cap(str(x.text, 80)), qty: str(x.qty, 24) }));
   return { detail: str(o.detail, 400), answers, steps, tips, buy, at: Date.now(), by, stepsAdded: false, buyAdded: null };

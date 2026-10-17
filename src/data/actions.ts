@@ -375,7 +375,7 @@ export async function sortOverig(listId: string) {
 }
 
 /* ---------- AI: taken uitwerken (eerst vragen, dan het plan) ---------- */
-type PlanJob = { id: string; mode: 'ask' | 'plan'; text?: string; answers?: PlanAnswer[]; extra?: string };
+type PlanJob = { id: string; mode: 'ask' | 'plan'; text?: string; answers?: PlanAnswer[]; extra?: string; force?: boolean };
 const planQueue: PlanJob[] = [];
 let planBusy = false;
 
@@ -388,7 +388,7 @@ export function queuePlan(id: string, force = false, text?: string) {
   if (!S().aiOn || S().planning.includes(id)) return;
   const it = S().items.find(i => i.id === id);
   if (it && (it.plan || it.planQ) && !force) return;
-  startJob({ id, mode: 'ask', text });
+  startJob({ id, mode: 'ask', text, force });
 }
 /** The household answered the questions (or skipped them): make the plan. */
 export function submitAnswers(id: string, skip: boolean) {
@@ -399,7 +399,7 @@ export function submitAnswers(id: string, skip: boolean) {
   const answers = skip ? [] : qs.map((q, qi) => ({ q: q.q, a: (sel.picks[qi] || []).map(oi => q.options[oi]).filter(Boolean).join(', ') })).filter(a => a.a);
   const extra = skip ? '' : sel.extra.trim().slice(0, 200);
   setS({ planOpen: [...S().planOpen.filter(x => x !== id), id] });
-  startJob({ id, mode: 'plan', answers, extra });
+  startJob({ id, mode: 'plan', answers, extra, force: true });
 }
 export function pickAnswer(id: string, qi: number, oi: number) {
   const q = S().items.find(i => i.id === id)?.planQ?.questions[qi]; if (!q) return;
@@ -416,7 +416,7 @@ async function runPlanQueue() {
   if (planBusy) return; planBusy = true;
   while (planQueue.length) {
     const job = planQueue.shift()!;
-    try { job.mode === 'ask' ? await askQuestions(job.id, job.text) : await makePlan(job.id, job.answers || [], job.extra || ''); }
+    try { job.mode === 'ask' ? await askQuestions(job.id, job.text, !!job.force) : await makePlan(job.id, job.answers || [], job.extra || '', !!job.force); }
     catch (e) { console.warn(e); }
     const { [job.id]: _, ...planMode } = S().planMode;
     setS({ planning: S().planning.filter(x => x !== job.id), planMode });
@@ -432,12 +432,16 @@ async function taskFor(id: string, fallbackText?: string) {
   const others = it ? listItems(it.listId).filter(i => !i.done && i.id !== id).map(i => i.text).slice(0, 25) : [];
   return { listName: l?.name || '', task: text, note: it?.note || '', due: it?.due || null, others, today: todayLong() };
 }
-async function askQuestions(id: string, fallbackText?: string) {
+/** force = someone asked for it (pencil › Werk uit, Opnieuw uitwerken); otherwise the AI may decide it is not worth it. */
+async function askQuestions(id: string, fallbackText?: string, force = false) {
   const ctx = await taskFor(id, fallbackText); if (!ctx) return;
   try {
-    const questions = cleanQuestions(await post('questions', ctx));
+    const data = await post<{ worth?: boolean }>('questions', { ...ctx, force });
+    const questions = cleanQuestions(data);
     const cur = S().items.find(i => i.id === id); if (!cur) return;
-    if (!questions.length) { await makePlan(id, [], ''); return; }
+    // An everyday chore ("stofzuigen") is not worth working out: leave the task as it is.
+    if (!force && data && data.worth === false) return;
+    if (!questions.length) { await makePlan(id, [], '', force); return; }
     // Keep earlier answers where the same question comes back.
     const prev = cur.plan?.answers || [];
     const picks: Record<number, number[]> = {};
@@ -450,7 +454,7 @@ async function askQuestions(id: string, fallbackText?: string) {
     write(updateDoc(itemRef(id), { planQ: { questions, at: Date.now(), by: me() } }));
   } catch (e) { toast((e as Error).message); }
 }
-async function makePlan(id: string, answers: PlanAnswer[], extra: string) {
+async function makePlan(id: string, answers: PlanAnswer[], extra: string, open = false) {
   const ctx = await taskFor(id); if (!ctx) return;
   try {
     const data = await post('elaborate', { ...ctx, answers, extra });
@@ -458,9 +462,15 @@ async function makePlan(id: string, answers: PlanAnswer[], extra: string) {
     const plan = cleanPlan(data, me(), extra ? [...answers, { q: 'Verder', a: extra }] : answers);
     if (!plan.detail && !plan.steps.length && !plan.tips.length && !plan.buy.length) return;
     const { [id]: _, ...qaSel } = S().qaSel;
-    setS({ qaSel, planOpen: [...S().planOpen.filter(x => x !== id), id] });
+    // Worked out on its own: stays folded behind the chip. Asked for or answered: show it.
+    setS({ qaSel, planOpen: open ? [...S().planOpen.filter(x => x !== id), id] : S().planOpen.filter(x => x !== id) });
     write(updateDoc(itemRef(id), { plan, planQ: null }));
   } catch (e) { toast((e as Error).message); }
+}
+/** Drop a worked-out plan (or open questions) the household does not want. */
+export function removePlan(id: string) {
+  setS({ planOpen: S().planOpen.filter(x => x !== id) });
+  write(updateDoc(itemRef(id), { plan: null, planQ: null }));
 }
 export function planAddSteps(id: string) {
   const it = S().items.find(i => i.id === id); if (!it?.plan) return;

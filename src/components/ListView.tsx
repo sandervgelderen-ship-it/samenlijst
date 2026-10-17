@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Check, Pencil, Plus, ShoppingCart, Sparkles } from 'lucide-react';
 import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo } from '../lib/domain';
-import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
+import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
 import type { CatId, Item, List, PlanQuestions } from '../types';
 import { Avatar, Doodle, useNames } from './bits';
@@ -228,7 +228,10 @@ function PlanPart({ item: i }: { item: Item }) {
             </div>
           )}
           <div className="pfoot">
-            {readOnly || !aiOn ? <span /> : <button className="linkbtn" onClick={() => queuePlan(i.id, true)}>Opnieuw uitwerken</button>}
+            <span style={{ display: 'flex', gap: 12 }}>
+              {!readOnly && aiOn && <button className="linkbtn" onClick={() => queuePlan(i.id, true)}>Opnieuw</button>}
+              {!readOnly && <button className="linkbtn" onClick={() => removePlan(i.id)}>Weghalen</button>}
+            </span>
             <button className="linkbtn" onClick={() => togglePlanOpen(i.id)}>Inklappen</button>
           </div>
         </div>
@@ -262,7 +265,10 @@ function QuestionCard({ item: i, pq }: { item: Item; pq: PlanQuestions }) {
             <input className="field" id={`pq-extra-${i.id}`} maxLength={200} value={sel?.extra || ''} onChange={e => setExtra(i.id, e.target.value)} placeholder="Bijv. budget, voorkeur, wie er meehelpt" />
           </label>
           <div className="pfoot">
-            <button className="linkbtn" onClick={() => submitAnswers(i.id, true)}>Sla vragen over</button>
+            <span style={{ display: 'flex', gap: 12 }}>
+              <button className="linkbtn" onClick={() => submitAnswers(i.id, true)}>Sla vragen over</button>
+              <button className="linkbtn" onClick={() => removePlan(i.id)}>Niet nodig</button>
+            </span>
             <button className="btn" onClick={() => submitAnswers(i.id, false)}>{answered ? `Werk uit (${answered}/${pq.questions.length})` : 'Werk uit'}</button>
           </div>
         </>

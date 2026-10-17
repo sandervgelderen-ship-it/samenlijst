@@ -83,11 +83,12 @@ Andere open taken op de lijst: ${list(b.others, 25)}.`;
 export function questionsPrompt(b: any) {
   return `${taskContext(b)}
 
-Voordat je deze taak uitwerkt: welke details moet je weten om een goed plan te maken dat bij dit huishouden past? Stel 0 tot 4 meerkeuzevragen.
-- Alleen vragen waarvan het antwoord het plan echt verandert, zoals omvang, budget, wie er meedoet, timing of voorkeuren. Niets vragen wat al uit de taak blijkt.
-- Per vraag 2 tot 5 korte antwoordopties die elkaar uitsluiten; voeg waar handig "Weet ik nog niet" toe.
-- Zet "multi" op true als meerdere antwoorden tegelijk kunnen gelden.
-- Is de taak één simpele handeling (bijv. "kapper bellen"), geef dan een lege lijst.`;
+Beoordeel eerst of het zin heeft deze taak uit te werken ("worth").
+- "worth": false voor alledaagse klusjes en simpele handelingen die iedereen kan zonder plan, zoals stofzuigen, afwassen, vuilnis buitenzetten, was draaien, kapper bellen, boodschappen doen.
+- "worth": true alleen als een plan echt helpt: iets met meerdere stappen, een deadline, kosten, regelwerk of andere mensen (verhuizen, feestje organiseren, paspoort verlengen, badkamer verbouwen).
+${b.force ? 'De gebruiker vroeg zelf om uitwerking: zet "worth" op true.\n' : ''}
+Als "worth" true is: stel 0 tot 3 meerkeuzevragen over details die het plan echt veranderen (omvang, budget, wie meedoet, timing). Niets vragen wat al uit de taak blijkt of wat weinig uitmaakt. Per vraag 2 tot 4 korte opties; zet "multi" op true als meerdere antwoorden kunnen gelden.
+Als "worth" false is: geef een lege lijst vragen.`;
 }
 
 export function elaboratePrompt(b: any) {
@@ -97,11 +98,11 @@ export function elaboratePrompt(b: any) {
     : '';
   return `${taskContext(b)}${known}
 
-Werk deze taak praktisch uit, toegespitst op Nederland en op wat het huishouden vertelde:
-- "detail": één of twee zinnen over wat erbij komt kijken. Concreet, geen open deuren.
-- "steps": 0 tot 8 afvinkbare stappen in logische volgorde, elk kort en beginnend met een werkwoord. Geef een datum ("due", JJJJ-MM-DD) alleen als er een deadline is, en plan dan terug vanaf die deadline; gebruik anders een lege string. Laat "steps" leeg als de taak één simpele handeling is. Herhaal geen andere open taken.
-- "tips": 0 tot 4 nuttige suggesties: wat vaak vergeten wordt, slimme alternatieven, kosten of tijd, wie je erbij kunt betrekken.
-- "buy": 0 tot 10 dingen die hiervoor gekocht moeten worden, met hoeveelheid ("qty"). Leeg als er niets te kopen is.`;
+Werk deze taak kort en praktisch uit, toegespitst op Nederland en op wat het huishouden vertelde. Schrijf alleen wat iemand niet zelf al bedenkt; geen open deuren, geen vanzelfsprekende stappen.
+- "detail": hooguit één korte zin, alleen als er iets niet-vanzelfsprekends bij komt kijken; anders een lege string.
+- "steps": 0 tot 5 afvinkbare stappen in logische volgorde, elk kort en beginnend met een werkwoord. Alleen stappen die echt los gedaan moeten worden (iets regelen, kopen, afspreken), geen deelhandelingen van één klus. Geef een datum ("due", JJJJ-MM-DD) alleen als er een deadline is en plan dan terug; gebruik anders een lege string.
+- "tips": 0 tot 2 tips, alleen als ze echt iets toevoegen (iets wat vaak vergeten wordt, een kosten- of tijdsbesparing). Liever geen tip dan een voor de hand liggende.
+- "buy": 0 tot 8 dingen die hiervoor gekocht moeten worden, met hoeveelheid ("qty"). Leeg als er niets te kopen is.`;
 }
 
 export function voicePrompt(b: any) {
@@ -155,9 +156,10 @@ export const VOICE_SCHEMA = {
 export const QUESTIONS_SCHEMA = {
   type: 'OBJECT',
   properties: {
+    worth: { type: 'BOOLEAN' },
     questions: { type: 'ARRAY', items: { type: 'OBJECT', properties: { q: STR, options: { type: 'ARRAY', items: STR }, multi: { type: 'BOOLEAN' } }, required: ['q', 'options'] } },
   },
-  required: ['questions'],
+  required: ['worth', 'questions'],
 };
 export const PLAN_SCHEMA = {
   type: 'OBJECT',

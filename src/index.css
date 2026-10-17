@@ -89,7 +89,7 @@ button { cursor: pointer; }
 }
 
 /* Header */
-.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); box-shadow: 0 8px 12px -10px color-mix(in srgb, var(--ink) 18%, transparent); }
 .top .wrap { display: flex; align-items: center; gap: 10px; padding-block: 12px 8px; min-height: 64px; }
 .logo { width: 34px; height: 34px; flex: none; }
 .logo svg { width: 100%; height: 100%; display: block; }

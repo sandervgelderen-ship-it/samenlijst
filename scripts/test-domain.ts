@@ -61,8 +61,8 @@ const qs = cleanQuestions({ questions: [
   { question: 'Budget?', options: [{ label: '< 500' }, { text: '500-1000' }] },
   { q: 'Vijfde', options: ['a', 'b'] }, { q: 'Zesde', options: ['a', 'b'] },
 ] });
-t('vragen: dubbele opties weg, max 4', () => assert.deepEqual(qs.map(q => q.options.length), [3, 2, 2, 2]));
-t('vragen: meerdere mogelijk', () => assert.deepEqual(qs.map(q => q.multi), [false, true, false, false]));
+t('vragen: dubbele opties weg, max 3', () => assert.deepEqual(qs.map(q => q.options.length), [3, 2, 2]));
+t('vragen: meerdere mogelijk', () => assert.deepEqual(qs.map(q => q.multi), [false, true, false]));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');
