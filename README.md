@@ -6,9 +6,10 @@ Gedeelde boodschappen- en takenlijsten voor het hele huishouden. Gebouwd op deze
 
 - **Huishoudens**: iedereen in een huishouden ziet dezelfde lijsten, live. Nodig huisgenoten uit met een code van 6 tekens.
 - **Snel toevoegen** op het beginscherm: typ alles door elkaar (`melk, batterijen, tandarts bellen vrijdag`) en elk item gaat naar de juiste lijst. Twijfelt de app, dan vraagt hij het.
-- **Eerst AI-analyse**: elk nieuw item gaat eerst langs Gemini: nette naam (spelfouten verbeterd), aantal, merk of detail, afdeling, datum, en "melk en eieren" wordt twee items. Wat jullie de kennisbank leerden, beslist mee. Zonder AI werkt toevoegen gewoon met de regels.
+- **Eerst AI-analyse**: elk nieuw item gaat eerst langs Gemini: nette naam (spelfouten verbeterd), aantal, merk of detail, afdeling, datum, en "melk en eieren" wordt twee items. De voorkeuren uit het geheugen gelden daarbij altijd. Zonder AI werkt toevoegen gewoon met de regels.
 - **Spraakmemo**: tik op de microfoon, spreek in wat er nodig is; Gemini schrijft het uit en verdeelt het over de lijsten.
-- **Kennisbank**: elke keuze, verplaatsing en aangepaste afdeling wordt onthouden en gedeeld, zodat snel toevoegen steeds beter wordt.
+- **Geheugen**: algemene voorkeuren en afspraken van het huishouden, nooit losse producten ("Schoonmaakproducten moeten ecologisch zijn", "Klusspullen horen op de lijst Klussen"). Voeg ze zelf toe via *Geheugen* op het beginscherm of door `onthoud: …` te typen; uit keuzes en correcties leidt Gemini er zelf regels bij af. Elke AI-functie krijgt het geheugen mee. Gedeeld met het hele huishouden.
+- **Aanbiedingen** (boodschappenlijst): kies een plaats en Gemini zoekt met Google Search de folders van deze week bij supermarkten in de buurt. Aanbiedingen voor wat op de lijst staat komen bovenaan en kun je bij het item noteren.
 - **Boodschappen per afdeling**, met aantallen (`2 pak melk`), recente items en *Ik ga boodschappen doen*.
 - **Taken met datums** in gewoon Nederlands (`morgen`, `vrijdag`, `12 nov`) en iemand die het doet.
 - **Taken uitwerken**: Gemini stelt eerst een paar meerkeuzevragen over de details (omvang, budget, wie helpt) en maakt daarna van de taak een toelichting, stappen, tips en een lijst met wat je moet kopen. Met één tik zet je die op de lijsten.
@@ -45,7 +46,7 @@ Samenlijst gebruikt **hetzelfde Firebase-project als Moestuin** (`firebase-apple
 | Pad | Inhoud |
 |---|---|
 | `samenlijstHouseholds/{id}` | naam, leden, uitnodigingscode |
-| `samenlijstHouseholds/{id}/lists`, `/items`, `/kb` | lijsten, items en de kennisbank |
+| `samenlijstHouseholds/{id}/lists`, `/items`, `/kb` | lijsten, items en het geheugen (`kind: 'rule'`; oudere documenten zonder `kind` zijn losse items uit de vroegere kennisbank en worden niet meer gebruikt) |
 | `samenlijstInvites/{code}` | welke code bij welk huishouden hoort |
 
 **Let op bij de beveiligingsregels.** Een Firebase-project heeft één set regels. `firestore.rules` in deze repo bevat daarom de regels van Moestuin *plus* die van Samenlijst. Zet je regels live, doe dat met dit bestand (`firebase deploy --only firestore:rules`), en neem het Samenlijst-deel ook over in de Moestuin-repo, anders overschrijft een deploy vanuit Moestuin de Samenlijst-regels.
@@ -67,8 +68,10 @@ In de Firebase-console moeten **E-mail/wachtwoord** en **Google** aan staan onde
 | `POST /api/sort-aisles` | items uit *Overig* bij de juiste afdeling zetten |
 | `POST /api/questions` | meerkeuzevragen over de details van een taak |
 | `POST /api/elaborate` | een taak uitwerken, met de antwoorden |
+| `POST /api/learn` | uit een correctie of keuze een algemene regel voor het geheugen afleiden (of niets) |
+| `POST /api/offers` | supermarktaanbiedingen in een plaats, met Google Search (grounding) |
 
-Alle routes geven gestructureerde JSON terug (Gemini `responseSchema`). De Gemini-sleutel blijft op de server.
+Alle routes geven gestructureerde JSON terug (Gemini `responseSchema`), behalve `/offers`: zoeken met Google gaat niet samen met een schema, dus daar vraagt de prompt om JSON en geeft de route ook de bronnen en de zoeksuggestie van Google mee (die moet je tonen bij antwoorden met Google Search). De Gemini-sleutel blijft op de server.
 
 Deploy zoals Moestuin: via AI Studio of naar Cloud Run met `npm run build && npm start` en `GEMINI_API_KEY` als secret.
 

@@ -39,3 +39,40 @@ export async function generateJSON(prompt: string, schema: object, image?: { mim
   if (!text) return {};
   try { return JSON.parse(text.trim()); } catch { return {}; }
 }
+
+/**
+ * A call grounded in Google Search (for current information such as supermarket offers).
+ * Search grounding and a response schema do not mix, so the prompt asks for JSON and we parse the text.
+ * Returns the parsed JSON plus the pages used and Google's search-suggestion chip.
+ */
+export async function generateGrounded(prompt: string): Promise<{ data: unknown; sources: { title: string; uri: string }[]; searchHtml: string }> {
+  const ai = getAIClient();
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    config: { tools: [{ googleSearch: {} }] },
+  } as any);
+  const meta = (response as any).candidates?.[0]?.groundingMetadata || {};
+  return { data: parseLoose(response.text || ''), sources: groundingSources(meta), searchHtml: String(meta.searchEntryPoint?.renderedContent || '') };
+}
+
+/** JSON from a free-text answer: the whole text, a ```json block, or the first {...} / [...] in it. */
+export function parseLoose(text: string): unknown {
+  const out = String(text || '').trim();
+  try { return JSON.parse(out); } catch { /* try a fragment */ }
+  const m = out.match(/```(?:json)?\s*([\s\S]*?)```/) || out.match(/([\[{][\s\S]*[\]}])/);
+  if (m) { try { return JSON.parse(m[1]); } catch { /* give up */ } }
+  return {};
+}
+
+export function groundingSources(meta: any): { title: string; uri: string }[] {
+  const seen = new Set<string>();
+  const out: { title: string; uri: string }[] = [];
+  for (const c of Array.isArray(meta?.groundingChunks) ? meta.groundingChunks : []) {
+    const uri = String(c?.web?.uri || ''); if (!/^https?:\/\//.test(uri) || seen.has(uri)) continue;
+    seen.add(uri);
+    out.push({ title: String(c?.web?.title || c?.web?.domain || uri).slice(0, 80), uri });
+    if (out.length >= 8) break;
+  }
+  return out;
+}

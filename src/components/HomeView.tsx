@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Check, Plus, ShoppingCart, ListChecks, Sparkles } from 'lucide-react';
+import { Brain, Check, Plus, ShoppingCart, ListChecks, Sparkles } from 'lucide-react';
 import { colorOf, dueInfo, greetingPart, todayISO } from '../lib/domain';
 import { answerPending, createList, go, moveItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
@@ -8,14 +8,14 @@ import { Doodle, useNames } from './bits';
 import InstallPrompt from './InstallPrompt';
 import StoreAsks from './StoreAsks';
 
-const WHY: Record<string, string> = { kb: 'geleerd', rule: 'herkend', ai: 'Gemini', user: 'jouw keuze', explicit: 'via @', dup: 'stond er al op', only: '' };
+const WHY: Record<string, string> = { hist: 'eerder', rule: 'herkend', ai: 'Gemini', user: 'jouw keuze', explicit: 'via @', dup: 'stond er al op', only: '' };
 const lcVars = (l: List) => { const c = colorOf(l); return { ['--lc-bg' as string]: `var(--c-${c}-bg)`, ['--lc-fg' as string]: `var(--c-${c}-fg)` }; };
 const SHOPPING_FOR = 3 * 3600e3;
 
 export default function HomeView() {
   const lists = useStore(s => s.lists);
   const items = useStore(s => s.items);
-  const kbSize = useStore(s => s.kb.size);
+  const memSize = useStore(s => s.memory.length);
   const readOnly = useStore(s => s.readOnly);
   const user = useStore(s => s.user);
   const tipOpen = useStore(s => s.tipOpen);
@@ -44,7 +44,7 @@ export default function HomeView() {
 
       <div className="eyerow">
         <p className="eyebrow">Jullie lijsten</p>
-        {kbSize > 0 && <button className="linkbtn" onClick={() => setS({ sheet: { kind: 'kb' } })}><Sparkles size={14} /> Kennisbank · {kbSize}</button>}
+        {(!readOnly || memSize > 0) && <button className="linkbtn" onClick={() => setS({ sheet: { kind: 'kb' } })}><Brain size={14} /> Geheugen{memSize ? ` · ${memSize}` : ''}</button>}
       </div>
       {!lists.length && <div className="empty"><Doodle kind="note" /><strong>Nog geen lijsten</strong>Maak hieronder je eerste lijst, bijvoorbeeld Boodschappen of Klusjes.</div>}
       <div className="lists">{lists.map(l => <ListCard key={l.id} list={l} />)}</div>
@@ -55,10 +55,12 @@ export default function HomeView() {
         <ol>
           <li>Typ onderaan alles door elkaar, gescheiden door komma's: <em>melk, batterijen, tandarts bellen vrijdag</em>. Gemini analyseert elk item eerst: nette naam, aantal, afdeling, datum en op welke lijst het hoort.</li>
           <li>Of tik op de microfoon en spreek een memo in. Gemini schrijft het uit en verdeelt het over de lijsten.</li>
-          <li>Twijfelt hij, dan vraagt hij het. Elke keuze en elke verplaatsing komt in de kennisbank, dus hij hoeft het daarna niet meer te vragen.</li>
+          <li>Twijfelt hij, dan vraagt hij het. Uit je keuzes en correcties leidt Gemini voorkeuren af voor het <strong>geheugen</strong>, zoals <em>klusspullen horen op Klussen</em>.</li>
+          <li>Zelf iets vastleggen? Tik op <strong>Geheugen</strong> of typ <em>onthoud: schoonmaakproducten moeten ecologisch zijn</em>. Gemini houdt er daarna rekening mee bij alles.</li>
           <li>Wil je zelf kiezen? Zet <em>@lijstnaam</em> erachter, bijvoorbeeld <em>schroeven @klussen</em>.</li>
           <li>Nieuwe taken worden uitgewerkt. Eerst stelt Gemini een paar meerkeuzevragen over de details, daarna krijg je stappen, tips en wat je ervoor moet kopen.</li>
-          <li>Nodig huisgenoten uit via het poppetje rechtsboven. De kennisbank is gedeeld: wat de één leert, helpt de ander.</li>
+          <li>Op een boodschappenlijst zoekt <strong>Aanbiedingen</strong> de folders van supermarkten in jullie plaats door.</li>
+          <li>Nodig huisgenoten uit via het poppetje rechtsboven. Het geheugen is gedeeld: wat de één vastlegt, geldt voor iedereen.</li>
         </ol>
       </details>
     </>

@@ -3,7 +3,8 @@
  *   samenlijstHouseholds/{hid}            name, members[], memberInfo{uid: {name, photo}}, inviteCode, createdBy
  *   samenlijstHouseholds/{hid}/lists/{id}
  *   samenlijstHouseholds/{hid}/items/{id}
- *   samenlijstHouseholds/{hid}/kb/{id}     the shared knowledge base
+ *   samenlijstHouseholds/{hid}/kb/{id}     the shared memory: general preferences (kind 'rule');
+ *                                          older docs without a kind are single items from the former knowledge base
  *   samenlijstInvites/{code}               { hid } so someone with the code can find the household
  */
 import { onAuthStateChanged } from 'firebase/auth';
@@ -13,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { S, setS } from '../store/useStore';
-import type { Household, Item, KbEntry, List } from '../types';
+import type { Household, Item, List, Memory } from '../types';
 import { toast } from './toast';
 
 export const HH = 'samenlijstHouseholds';
@@ -109,7 +110,7 @@ function stopData() {
 export function selectHousehold(hid: string | null) {
   stopData();
   try { localStorage.setItem('samenlijst.hid', hid || ''); } catch { /* private mode */ }
-  setS({ hid, lists: [], items: [], kb: new Map(), listsLoaded: false, view: 'home', pending: [], receipt: [], sheet: null });
+  setS({ hid, lists: [], items: [], memory: [], oldKb: [], offers: null, listsLoaded: false, view: 'home', pending: [], receipt: [], sheet: null });
   if (!hid) return;
   unsubData.push(onSnapshot(col('lists', hid), (snap) => {
     setS({ lists: snap.docs.map(d => ({ id: d.id, ...d.data() } as List)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)), listsLoaded: true });
@@ -119,9 +120,14 @@ export function selectHousehold(hid: string | null) {
     if (!snap.metadata.fromCache && S().access === 'rules') setS({ access: null });
   }, onListenError));
   unsubData.push(onSnapshot(col('kb', hid), (snap) => {
-    const kb = new Map<string, KbEntry>();
-    snap.docs.forEach(d => { const v = d.data() as KbEntry; if (v && typeof v.key === 'string' && v.key) kb.set(v.key, { ...v, id: d.id }); });
-    setS({ kb });
+    const memory: Memory[] = [], oldKb: string[] = [];
+    snap.docs.forEach(d => {
+      const v = d.data() as Partial<Memory>;
+      if (v && v.kind === 'rule' && typeof v.text === 'string' && v.text) memory.push({ ...(v as Memory), id: d.id });
+      else oldKb.push(d.id);
+    });
+    memory.sort((a, b) => (b.at || 0) - (a.at || 0));
+    setS({ memory, oldKb });
   }, onListenError));
 }
 
@@ -185,6 +191,11 @@ export async function renewInviteCode(h: Household) {
 
 export async function renameHousehold(h: Household, name: string) {
   await updateDoc(doc(db, HH, h.id), { name: name.slice(0, 60) });
+}
+
+/** The place the household shops (for supermarket offers); shared with everyone in the household. */
+export async function setHouseholdPlace(h: Household, place: string) {
+  await updateDoc(doc(db, HH, h.id), { place: place.trim().slice(0, 80) });
 }
 
 export async function leaveHousehold(h: Household) {

@@ -3,7 +3,8 @@ import { setS, useStore } from '../../store/useStore';
 import ItemSheet from './ItemSheet';
 import ListSheet from './ListSheet';
 import SmartSheet from './SmartSheet';
-import KbSheet from './KbSheet';
+import MemorySheet from './MemorySheet';
+import OffersSheet from './OffersSheet';
 import HouseholdSheet from './HouseholdSheet';
 
 export const closeSheet = () => setS({ sheet: null });
@@ -31,7 +32,8 @@ export default function Sheets() {
     case 'item': return <ItemSheet key={sheet.id} id={sheet.id} />;
     case 'list': return <ListSheet key={sheet.id} id={sheet.id} />;
     case 'smart': return <SmartSheet key={sheet.mode + sheet.listId} mode={sheet.mode} listId={sheet.listId} />;
-    case 'kb': return <KbSheet />;
+    case 'kb': return <MemorySheet />;
+    case 'offers': return <OffersSheet key={sheet.listId} listId={sheet.listId} />;
     case 'household': return <HouseholdSheet />;
   }
 }

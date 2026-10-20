@@ -1,8 +1,8 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
-import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, learnEntry, kbKey, normStore, isSuper, decideStore, storeOptions } from '../src/lib/domain';
-import { cleanAnalysis, cleanQuestions } from '../src/lib/aiClean';
-import type { Item, KbEntry, List } from '../src/types';
+import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines } from '../src/lib/domain';
+import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules } from '../src/lib/aiClean';
+import type { Item, List } from '../src/types';
 
 const now = new Date('2026-10-17T09:00:00'); // a Saturday
 let failed = 0;
@@ -26,8 +26,7 @@ const lists: List[] = [
   { id: 'bood', name: 'Boodschappen', kind: 'shop', recent: ['Melk'], createdAt: 1 },
   { id: 'todo', name: "Todo's", kind: 'todo', createdAt: 2 },
 ];
-const kb = new Map<string, KbEntry>();
-const r = (s: string, ls = lists, items: Item[] = []) => route(prepEntry(s, ls, now), ls, items, kb);
+const r = (s: string, ls = lists, items: Item[] = []) => route(prepEntry(s, ls, now), ls, items);
 t('melk -> boodschappen', () => assert.equal(r('2 pak melk').listId, 'bood'));
 t('tandarts -> todo', () => assert.equal(r('tandarts bellen vrijdag').listId, 'todo'));
 t('@todo kiest zelf', () => assert.equal(r('pindakaas @todo').listId, 'todo'));
@@ -36,12 +35,12 @@ t('schroeven -> vragen', () => assert.equal(r('schroeven').listId, null));
 const three: List[] = [...lists, { id: 'klus', name: 'Bouwmarkt', kind: 'shop', createdAt: 3 }];
 t('twee winkels: batterijen -> vragen', () => assert.equal(r('batterijen', three).listId, null));
 t('twee winkels: melk uit geschiedenis', () => assert.equal(r('melk', three).listId, 'bood'));
-const learned = learnEntry(undefined, 'Schroeven', 'klus', { weight: 2, by: 'u1', listIds: new Set(three.map(l => l.id)) })!;
-kb.set(learned.key, learned);
-t('na leren: schroeven -> bouwmarkt', () => assert.equal(r('schroeven', three).listId, 'klus'));
-t('na leren: variant via fuzzy', () => assert.equal(r('schroeven 4mm', three).listId, 'klus'));
-const corrected = learnEntry(kb.get('schroeven'), 'Schroeven', 'bood', { weight: 2, from: 'klus', by: 'u1', listIds: new Set(three.map(l => l.id)) })!;
-t('correctie verschuift gewicht', () => assert.deepEqual(corrected.lists, { bood: 2 }));
+const item = (p: Partial<Item>): Item => ({ id: 'i' + Math.random(), listId: 'bood', text: '', qty: '', note: '', cat: null, done: false, doneBy: null, doneAt: null, urgent: false, due: null, assignee: null, addedBy: null, createdAt: 1, ...p });
+const hist = [item({ text: 'Schroeven', listId: 'klus', done: true, cat: 'overig', store: 'Gamma', createdAt: 5 })];
+t('eerder op een lijst: schroeven -> bouwmarkt', () => assert.deepEqual([r('schroeven', three, hist).listId, r('schroeven', three, hist).why], ['klus', 'hist']));
+t('afdeling: eerder gekozen gaat voor AI', () => assert.equal(pickCat('Havermelk', [item({ text: 'havermelk', cat: 'drinken', done: true })], 'zuivel'), 'drinken'));
+t('afdeling: anders AI, dan gok', () => assert.deepEqual([pickCat('Havermelk', [], 'zuivel'), pickCat('Melk', [], null)], ['zuivel', 'zuivel']));
+t('winkel: eerder gekocht bij', () => assert.deepEqual([knownStore('schroeven', hist), knownStore('melk', hist)], ['Bouwmarkt', null]));
 t('kbKey', () => assert.equal(kbKey('Crème  fraîche!'), 'creme fraiche'));
 
 const an = cleanAnalysis([
@@ -72,11 +71,39 @@ t('winkel: zekere AI zonder vraag', () => assert.deepEqual(decideStore(null, { s
 t('winkel: twijfel geeft een vraag met gok', () => assert.deepEqual(decideStore(undefined, { store: 'dierenwinkel', conf: 0.5 }), { store: null, ask: true, guess: 'Dierenwinkel' }));
 t('winkel: zonder AI geen vraag', () => assert.deepEqual(decideStore(null, null), { store: null, ask: false, guess: null }));
 t('winkel: opties gok, supermarkt, eigen winkels', () => assert.deepEqual(storeOptions('Dierenwinkel', ['Action', 'Action', 'Gamma', null], 5), ['Dierenwinkel', 'Supermarkt', 'Action', 'Bouwmarkt', 'Drogist']));
-const kbStore = learnEntry(undefined, 'Stro', null, { store: 'pets place', by: 'u1', listIds: new Set() })!;
-t('winkel: kennisbank onthoudt de winkel', () => assert.equal(kbStore.store, 'Dierenwinkel'));
-t('winkel: later leren zonder winkel houdt hem', () => assert.equal(learnEntry(kbStore, 'Stro', 'bood', { by: 'u1', listIds: new Set(['bood']) })!.store, 'Dierenwinkel'));
 const anStore = cleanAnalysis([{ i: 0, text: 'Stro', store: 'Dierenwinkel', storeConfidence: 0.55, list: 'bood', confidence: 0.9 }], 1);
 t('analyse: winkel en zekerheid', () => assert.deepEqual([anStore[0][0].store, anStore[0][0].storeConf], ['Dierenwinkel', 0.55]));
+
+// Geheugen: voorkeuren, geen losse items
+t('onthoud: herkennen', () => assert.deepEqual(
+  ['onthoud: schoonmaakproducten ecologisch', 'Onthoud dat we vegetarisch eten', 'onthoud koffie fairtrade', 'onthouden', 'melk'].map(parseRemember),
+  ['Schoonmaakproducten ecologisch', 'We vegetarisch eten', 'Koffie fairtrade', null, null]));
+t('regel of item', () => assert.deepEqual(
+  ['Schoonmaakproducten moeten ecologisch zijn', 'Toiletreiniger', 'Melk → Boodschappen', 'Klusspullen horen op Klussen'].map(isRule),
+  [true, false, false, true]));
+const mem0 = { listIds: new Set(['klus']), source: 'geleerd' as const, by: 'u1', now: 7 };
+t('geheugen: regel bewaren', () => assert.deepEqual(makeMemory('schoonmaakproducten moeten ecologisch zijn.', [], { ...mem0, topic: 'schoonmaak', list: 'x' }),
+  { kind: 'rule', text: 'Schoonmaakproducten moeten ecologisch zijn', topic: 'Schoonmaak', list: null, source: 'geleerd', from: '', at: 7, by: 'u1' }));
+t('geheugen: geen item, geen dubbele', () => assert.deepEqual([
+  makeMemory('Toiletreiniger', [], mem0),
+  makeMemory('Schoonmaakproducten moeten ecologisch zijn', [{ text: 'schoonmaakproducten moeten ecologisch zijn' }], mem0),
+], [null, null]));
+t('geheugen: zelf typen mag kort', () => assert.equal(makeMemory('Altijd bio', [], { ...mem0, source: 'zelf' })?.text, 'Altijd bio'));
+t('geheugen: regels voor de AI', () => assert.deepEqual(
+  memoryLines([{ text: 'Oud', list: null, at: 1 }, { text: 'Klusspullen op Klussen', list: 'klus', at: 2 }], three),
+  ['Klusspullen op Klussen (lijst "Bouwmarkt", id "klus")', 'Oud']));
+t('geleerde regels: items eruit', () => assert.deepEqual(
+  cleanRules({ rules: [{ text: 'Toiletreiniger' }, { text: 'Schoonmaakproducten moeten ecologisch zijn.', topic: 'schoonmaak', list: '' }, { text: 'schoonmaakproducten moeten ecologisch zijn' }] }),
+  [{ text: 'Schoonmaakproducten moeten ecologisch zijn', topic: 'Schoonmaak', list: null }]));
+
+// Aanbiedingen
+const offers = cleanOffers({ week: '20 t/m 26 oktober', stores: ['Jumbo'], offers: [
+  { store: 'jumbo', product: 'chips', deal: '2e halve prijs', price: '€1,99', until: '2026-10-26', match: '', cat: 'snacks' },
+  { store: 'Albert Heijn', product: 'halfvolle melk', deal: '1+1 gratis', price: '', until: 'zondag', match: 'melk' },
+  { store: 'Jumbo', product: 'Chips', deal: 'dubbel' }, { store: '', product: 'zonder winkel' },
+] });
+t('aanbiedingen: lijst eerst, dubbel en leeg weg', () => assert.deepEqual(offers.offers.map(o => [o.store, o.product, o.match, o.until]), [['Albert Heijn', 'Halfvolle melk', 'Melk', null], ['Jumbo', 'Chips', '', '2026-10-26']]));
+t('aanbiedingen: winkels en afdeling', () => assert.deepEqual([offers.stores, offers.offers[0].cat, offers.week], [['Jumbo', 'Albert Heijn'], 'zuivel', '20 t/m 26 oktober']));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { CATS, normStore, STORES, SUPERMARKT } from '../../lib/domain';
-import { deleteItems, learn, moveItem, queuePlan, setStore, updateItem, usedStores } from '../../data/actions';
+import { CAT_LABEL, CATS, normStore, STORES, SUPERMARKT } from '../../lib/domain';
+import { deleteItems, learnFrom, moveItem, queuePlan, setStore, updateItem, usedStores } from '../../data/actions';
 import { setS, useStore } from '../../store/useStore';
 import type { CatId, Item } from '../../types';
 import { Avatar, useHousehold, useNames } from '../bits';
@@ -26,7 +26,12 @@ export default function ItemSheet({ id }: { id: string }) {
     const patch: Partial<Item> = { text: (f!.text.trim() || item!.text).slice(0, 120), qty: f!.qty.trim().slice(0, 24), note: f!.note.trim().slice(0, 140), urgent: f!.urgent };
     if (shop) patch.cat = f!.cat; else { patch.due = f!.due || null; patch.assignee = f!.assignee; }
     updateItem(id, patch);
-    if (shop && f!.cat !== (item!.cat || 'overig')) learn(patch.text!, null, { cat: f!.cat });
+    // Corrections may teach a general preference ("Schoonmaakproducten ecologisch"); Gemini decides.
+    const changed: string[] = [];
+    if (patch.text !== item!.text) changed.push(`naam "${item!.text}" werd "${patch.text}"`);
+    if (patch.note && patch.note !== (item!.note || '')) changed.push(`notitie "${patch.note}"`);
+    if (shop && f!.cat !== (item!.cat || 'overig')) changed.push(`afdeling ${CAT_LABEL[item!.cat || 'overig']} werd ${CAT_LABEL[f!.cat]}`);
+    if (changed.length) learnFrom(`Item "${patch.text}" op de lijst "${list?.name || ''}" aangepast: ${changed.join('; ')}.`);
     if (shop && (normStore(f!.store) || SUPERMARKT) !== (normStore(item!.store) || SUPERMARKT)) setStore(id, f!.store);
     if (f!.listId !== item!.listId) moveItem(id, f!.listId);
     closeSheet();

@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
-import { aiConfigured, generateJSON } from '../services/genai';
+import { aiConfigured, generateGrounded, generateJSON } from '../services/genai';
 import {
-  analyzePrompt, elaboratePrompt, questionsPrompt, forgotPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
-  ANALYZE_SCHEMA, PLAN_SCHEMA, QUESTIONS_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
+  analyzePrompt, elaboratePrompt, questionsPrompt, forgotPrompt, learnPrompt, offersPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+  ANALYZE_SCHEMA, LEARN_SCHEMA, PLAN_SCHEMA, QUESTIONS_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
 } from '../prompts';
 
 export const aiRouter = Router();
@@ -61,4 +61,18 @@ aiRouter.post('/voice-memo', asyncHandler(async (req, res) => {
   const m = typeof b.audio === 'string' ? b.audio.match(/^data:(audio\/[a-z0-9.+-]+)(?:;[^,]*)?;base64,(.+)$/i) : null;
   if (!m) { res.status(400).json({ error: 'Er kwam geen opname mee. Probeer het opnieuw.' }); return; }
   res.json(await generateJSON(voicePrompt(b), VOICE_SCHEMA, { mimeType: m[1], data: m[2] }));
+}));
+
+/** Geheugen: turn a correction or choice into a general rule (or nothing). */
+aiRouter.post('/learn', asyncHandler(async (req, res) => {
+  res.json(await generateJSON(learnPrompt(req.body || {}), LEARN_SCHEMA));
+}));
+
+/** Aanbiedingen: current supermarket offers near a place, via Google Search grounding. */
+aiRouter.post('/offers', asyncHandler(async (req, res) => {
+  const b = req.body || {};
+  if (!String(b.place || '').trim()) { res.status(400).json({ error: 'Kies eerst een plaats.' }); return; }
+  const { data, sources, searchHtml } = await generateGrounded(offersPrompt(b));
+  const o = data && typeof data === 'object' && !Array.isArray(data) ? data : { offers: data };
+  res.json({ ...o, _sources: sources, _searchHtml: searchHtml });
 }));

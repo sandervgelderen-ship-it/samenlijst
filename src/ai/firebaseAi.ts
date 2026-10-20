@@ -7,28 +7,32 @@
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { app } from '../firebase';
 import {
-  analyzePrompt, elaboratePrompt, forgotPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+  analyzePrompt, elaboratePrompt, forgotPrompt, learnPrompt, offersPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
 } from '../server/prompts';
 
 // Newest stable model first; older ones only if a model is not available for this project.
 const MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'];
 let modelIndex = 0;
 const models = new Map<string, ReturnType<typeof getGenerativeModel>>();
-function getModel(name: string) {
-  let m = models.get(name);
+/** grounded = may search Google for current information; such answers come as text (no JSON mode with tools). */
+function getModel(name: string, grounded = false) {
+  const key = name + (grounded ? '+search' : '');
+  let m = models.get(key);
   if (!m) {
     const ai = getAI(app, { backend: new GoogleAIBackend() });
-    m = getGenerativeModel(ai, { model: name, generationConfig: { responseMimeType: 'application/json' } });
-    models.set(name, m);
+    m = grounded
+      ? getGenerativeModel(ai, { model: name, tools: [{ googleSearch: {} }] })
+      : getGenerativeModel(ai, { model: name, generationConfig: { responseMimeType: 'application/json' } });
+    models.set(key, m);
   }
   return m;
 }
 const modelMissing = (e: unknown) => /404|not found|is not supported|no longer available|retired|deprecated/i.test(String((e as Error)?.message || e));
 
-async function generate(parts: (string | { inlineData: { mimeType: string; data: string } })[]) {
+async function generate(parts: (string | { inlineData: { mimeType: string; data: string } })[], grounded = false) {
   for (;;) {
     try {
-      return await getModel(MODELS[modelIndex]).generateContent(parts);
+      return await getModel(MODELS[modelIndex], grounded).generateContent(parts);
     } catch (e) {
       if (modelMissing(e) && modelIndex < MODELS.length - 1) { modelIndex++; continue; }
       throw e;
@@ -47,6 +51,8 @@ const SHAPE: Record<string, string> = {
   'sort-aisles': '[{"i":0,"cat":"zuivel"}]',
   'voice-memo': '{"transcript":"...","items":[{"text":"Melk","qty":"2 pak","due":""}]}',
   'route-items': '[{"i":0,"list":"<lijst-id>","confidence":0.9}]',
+  'learn': '{"rules":[{"text":"Schoonmaakproducten moeten ecologisch zijn","topic":"Schoonmaak","list":""}]}',
+  'offers': '{"week":"20 t/m 26 oktober","stores":["Albert Heijn","Jumbo"],"offers":[{"store":"Albert Heijn","product":"Halfvolle melk","deal":"2e halve prijs","price":"€1,19","until":"2026-10-26","match":"Melk","cat":"zuivel"}]}',
 };
 
 function media(dataUrl: unknown, kind: 'image' | 'audio') {
@@ -65,6 +71,8 @@ export async function runLocal(path: string, body: any): Promise<unknown> {
     case 'forgot': prompt = forgotPrompt(body); break;
     case 'sort-aisles': prompt = sortPrompt(body); break;
     case 'route-items': prompt = routePrompt(body); break;
+    case 'learn': prompt = learnPrompt(body); break;
+    case 'offers': return offers(body);
     case 'smart-add':
       attachment = media(body?.image, 'image');
       prompt = smartAddPrompt(body, !!attachment);
@@ -81,11 +89,36 @@ export async function runLocal(path: string, body: any): Promise<unknown> {
   const parts: (string | { inlineData: { mimeType: string; data: string } })[] = [text];
   if (attachment) parts.push(attachment);
   const result = await generate(parts);
-  const out = result.response.text().trim();
+  return parseLoose(result.response.text());
+}
+
+/** JSON from a model answer: the whole text, a ```json block, or the first {...} / [...] in it. */
+function parseLoose(text: string): unknown {
+  const out = String(text || '').trim();
   try { return JSON.parse(out); }
   catch {
     const m = out.match(/```(?:json)?\s*([\s\S]*?)```/) || out.match(/([\[{][\s\S]*[\]}])/);
     if (m) { try { return JSON.parse(m[1]); } catch { /* fall through */ } }
     return {};
   }
+}
+
+/** Supermarket offers: Gemini searches Google, so the answer is current; we keep the sources it used. */
+async function offers(body: any) {
+  if (!String(body?.place || '').trim()) throw new Error('Kies eerst een plaats.');
+  const text = `${offersPrompt(body)}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet bekend is):\n${SHAPE.offers}`;
+  const result = await generate([text], true);
+  const meta = result.response.candidates?.[0]?.groundingMetadata;
+  const seen = new Set<string>();
+  const sources: { title: string; uri: string }[] = [];
+  for (const c of meta?.groundingChunks || []) {
+    const uri = c.web?.uri || '';
+    if (!/^https?:\/\//.test(uri) || seen.has(uri)) continue;
+    seen.add(uri);
+    sources.push({ title: String(c.web?.title || c.web?.domain || uri).slice(0, 80), uri });
+    if (sources.length >= 8) break;
+  }
+  const data = parseLoose(result.response.text());
+  const o = data && typeof data === 'object' && !Array.isArray(data) ? data : { offers: data };
+  return { ...o, _sources: sources, _searchHtml: meta?.searchEntryPoint?.renderedContent || '' };
 }

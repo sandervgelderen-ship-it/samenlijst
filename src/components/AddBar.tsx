@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Clock, Mic, Plus, Send, Sparkles, X } from 'lucide-react';
-import { COMMON, kbKey, parseDue, parseEntry, splitEntries } from '../lib/domain';
-import { addItem, listAdd, quickAdd, quickPick, voiceMemo } from '../data/actions';
+import { COMMON, kbKey, parseDue, parseEntry, parseRemember, splitEntries } from '../lib/domain';
+import { addItem, listAdd, quickAdd, quickPick, remember, voiceMemo } from '../data/actions';
 import { toast } from '../data/toast';
 import { setS, useStore } from '../store/useStore';
 import type { List } from '../types';
@@ -13,7 +13,6 @@ export default function AddBar({ list }: { list?: List }) {
   const [value, setValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const aiOn = useStore(s => s.aiOn);
-  const kb = useStore(s => s.kb);
   const lists = useStore(s => s.lists);
   const items = useStore(s => s.items);
   const recording = useStore(s => s.recording);
@@ -30,7 +29,10 @@ export default function AddBar({ list }: { list?: List }) {
     e.preventDefault();
     const v = value.trim(); if (!v) return;
     setValue('');
-    if (home) quickAdd(v); else listAdd(list!.id, v);
+    // "onthoud: …" goes into the household's memory instead of onto a list.
+    const rule = parseRemember(v);
+    if (rule) { if (remember(rule, { source: 'zelf' })) toast(`Onthouden: ${rule}`, 'Bekijk', () => setS({ sheet: { kind: 'kb' } })); }
+    else if (home) quickAdd(v); else listAdd(list!.id, v);
     inputRef.current?.focus();
   }
 
@@ -41,13 +43,18 @@ export default function AddBar({ list }: { list?: List }) {
     const parts = splitEntries(value);
     const last = parts.length && !/[,;\n]\s*$/.test(value) ? parts[parts.length - 1] : '';
     const q = kbKey(parseDue(parseEntry(last).text).text);
-    if (q && !last.includes('@')) {
-      for (const e of [...kb.values()].sort((a, b) => (b.at || 0) - (a.at || 0))) {
-        if (!(e.key.startsWith(q) || (q.length >= 3 && e.key.includes(q)))) continue;
-        const best = Object.entries(e.lists || {}).filter(([id]) => lists.some(l => l.id === id)).sort((a, b) => b[1] - a[1])[0];
-        if (!best) continue;
-        if (items.some(i => i.listId === best[0] && !i.done && kbKey(i.text) === e.key)) continue;
-        chips.push({ label: e.text, text: e.text, to: best[0], icon: 'plus' });
+    if (q && !last.includes('@') && !parseRemember(value)) {
+      // Things that were on a list before (recently cleared or ticked off), with the list they were on.
+      const seen = new Set<string>();
+      const past: { text: string; to: string }[] = [];
+      for (const l of lists) for (const t of l.recent || []) past.push({ text: t, to: l.id });
+      for (const i of [...items].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))) if (i.done) past.push({ text: i.text, to: i.listId });
+      for (const p of past) {
+        const k = kbKey(p.text);
+        if (seen.has(k) || !(k.startsWith(q) || (q.length >= 3 && k.includes(q)))) continue;
+        seen.add(k);
+        if (items.some(i => i.listId === p.to && !i.done && kbKey(i.text) === k)) continue;
+        chips.push({ label: p.text, text: p.text, to: p.to, icon: 'plus' });
         if (chips.length >= 8) break;
       }
     }

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Household, Item, KbEntry, List, ListKind, Pending, Receipt, StoreAsk } from '../types';
+import type { Household, Item, List, ListKind, Memory, OfferResult, Pending, Receipt, StoreAsk } from '../types';
 
 export interface AppUser {
   uid: string;
@@ -13,6 +13,7 @@ export type Sheet =
   | { kind: 'list'; id: string }
   | { kind: 'smart'; mode: 'add' | 'forgot'; listId: string }
   | { kind: 'kb' }
+  | { kind: 'offers'; listId: string }
   | { kind: 'household' };
 
 export interface QaSel {
@@ -39,7 +40,10 @@ interface State {
   // shared data of the current household (live from Firestore)
   lists: List[];
   items: Item[];
-  kb: Map<string, KbEntry>;
+  /** The household's memory: general preferences and agreements (newest first). */
+  memory: Memory[];
+  /** Ids of entries from the old knowledge base (single items), no longer used; can be cleared. */
+  oldKb: string[];
   listsLoaded: boolean;
   readOnly: boolean;
   /** Firebase refuses access: the login expired ('session') or the security rules are missing ('rules'). */
@@ -75,6 +79,9 @@ interface State {
   /** Entries the AI is analysing right now (listId null = quick add on the home screen). */
   analyzing: { pid: string; text: string; listId: string | null }[];
   heard: string | null;
+  /** The last supermarket offers found, for this session. */
+  offers: OfferResult | null;
+  offersBusy: boolean;
 
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void;
 }
@@ -90,7 +97,8 @@ export const useStore = create<State>()((set) => ({
 
   lists: [],
   items: [],
-  kb: new Map(),
+  memory: [],
+  oldKb: [],
   listsLoaded: false,
   readOnly: false,
   access: null,
@@ -119,6 +127,8 @@ export const useStore = create<State>()((set) => ({
   listening: false,
   analyzing: [],
   heard: null,
+  offers: null,
+  offersBusy: false,
 
   set: (patch) => set(patch as any),
 }));

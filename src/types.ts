@@ -17,6 +17,8 @@ export interface Household {
   inviteCode: string;
   createdBy: string;
   createdAt: number;
+  /** Where the household shops, for the supermarket offers ("Utrecht", "3511 AB"). */
+  place?: string;
 }
 
 export interface Shopper {
@@ -77,24 +79,32 @@ export interface Item {
   planQ?: PlanQuestions | null;
 }
 
-/** One knowledge-base entry: where an item tends to go, and its aisle if someone set it. */
-export interface KbEntry {
+/**
+ * One thing the household's memory holds: a general preference or agreement (metadata),
+ * never a single product or task. "Schoonmaakproducten moeten ecologisch zijn",
+ * "Klusspullen horen op de lijst Klussen". Stored in the kb collection with kind 'rule'.
+ */
+export interface Memory {
   id: string;
-  key: string;
+  kind: 'rule';
   text: string;
-  lists: Record<string, number>;
-  cat: CatId | null;
-  /** Where the household buys this (learned from their answer or a confident AI): 'Supermarkt', 'Bouwmarkt'… */
-  store?: string | null;
+  /** Short subject, 1 or 2 words: "Schoonmaak", "Klussen". */
+  topic: string;
+  /** The list the rule is about, if any. */
+  list: string | null;
+  /** 'zelf' = typed by someone, 'geleerd' = Gemini derived it from a correction or choice. */
+  source: 'zelf' | 'geleerd';
+  /** What the household did that taught it (for 'geleerd'). */
+  from: string;
   at: number;
   by: string | null;
 }
 
-export type RouteWhy = 'kb' | 'rule' | 'ai' | 'user' | 'explicit' | 'dup' | 'only' | 'unknown' | 'nolists';
+export type RouteWhy = 'hist' | 'rule' | 'ai' | 'user' | 'explicit' | 'dup' | 'only' | 'unknown' | 'nolists';
 
 export interface Entry {
   pid: string;
-  /** What was literally typed (without @lijst), so the knowledge base can learn it too. */
+  /** What was literally typed (without @lijst). */
   raw: string;
   qty: string;
   text: string;
@@ -129,4 +139,32 @@ export interface StoreAsk {
   text: string;
   guess: string | null;
   options: string[];
+}
+
+/** One supermarket offer Gemini found online for the household's place. */
+export interface Offer {
+  store: string;
+  product: string;
+  /** "1+1 gratis", "2e halve prijs", "25% korting". */
+  deal: string;
+  /** Offer price as shown, e.g. "€2,49"; empty when unknown. */
+  price: string;
+  /** Last day it is valid (JJJJ-MM-DD), or null. */
+  until: string | null;
+  /** The item on the shopping list it matches, or '' when it is a general offer. */
+  match: string;
+  cat: CatId | null;
+}
+
+export interface OfferResult {
+  place: string;
+  /** "20 t/m 26 oktober" as the folders say it. */
+  week: string;
+  stores: string[];
+  offers: Offer[];
+  /** Pages Gemini used (Google Search grounding). */
+  sources: { title: string; uri: string }[];
+  /** Google's search-suggestion chip (HTML), shown as required for grounded answers. */
+  searchHtml: string;
+  at: number;
 }

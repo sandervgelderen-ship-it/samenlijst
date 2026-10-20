@@ -4,13 +4,13 @@
  */
 import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { post } from '../api';
-import { cleanAisles, cleanAnalysis, cleanPlan, cleanQuestions, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
+import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, cleanQuestions, cleanRules, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
 import {
-  CAT_LABEL, catFor, colorOf, COLORS, decideStore, guessCat, isSuper, kbKey, learnEntry, normStore, parseDue, parseEntry, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS,
+  CAT_LABEL, catFor, colorOf, COLORS, decideStore, isSuper, kbKey, knownStore, makeMemory, memoryLines, normStore, parseDue, parseEntry, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS,
 } from '../lib/domain';
 import { S, setS } from '../store/useStore';
-import type { CatId, Entry, Item, List, ListKind, PlanAnswer, Pending, Receipt, RouteWhy, StoreAsk } from '../types';
-import { failed, itemRef, kbRef, listRef, newId, safeWrite } from './repo';
+import type { CatId, Entry, Item, List, ListKind, Memory, OfferResult, PlanAnswer, Pending, Receipt, RouteWhy, StoreAsk } from '../types';
+import { hRef, itemRef, kbRef, listRef, newId, safeWrite } from './repo';
 import { toast } from './toast';
 import { confetti } from '../lib/confetti';
 
@@ -19,20 +19,67 @@ const listById = (id: string) => S().lists.find(l => l.id === id);
 export const listItems = (listId: string) => S().items.filter(i => i.listId === listId);
 const write = (op: () => Promise<unknown>) => { void safeWrite(op); };
 
-/* ---------- Knowledge base ---------- */
-export function learn(text: string, listId: string | null, opts: { weight?: number; from?: string | null; cat?: CatId | null; store?: string | null } = {}) {
-  if (S().readOnly) return;
-  const key = kbKey(text);
-  const next = learnEntry(S().kb.get(key), text, listId, { ...opts, by: me(), listIds: new Set(S().lists.map(l => l.id)) });
-  if (!next) return;
-  const { id, ...body } = next;
-  const kb = new Map(S().kb); kb.set(next.key, next); setS({ kb });
+/* ---------- Geheugen: general preferences and agreements, never single items ----------
+ * The memory holds metadata about the household ("Schoonmaakproducten moeten ecologisch zijn",
+ * "Klusspullen horen op de lijst Klussen"). People add rules themselves; Gemini also derives them
+ * from corrections and choices. Every AI call gets the memory, so the rules apply to new items,
+ * plans and suggestions. Stored in the kb collection with kind 'rule' (no new security rules needed). */
+const listIds = () => new Set(S().lists.map(l => l.id));
+/** The memory as prompt lines. */
+export const memoryForAi = () => memoryLines(S().memory, S().lists);
+
+/** Save a rule. Returns it, or null when it is empty, not a rule, or already known. */
+export function remember(text: string, opts: { topic?: string; list?: string | null; source?: Memory['source']; from?: string; quiet?: boolean } = {}): Memory | null {
+  if (S().readOnly) return null;
+  const body = makeMemory(text, S().memory, { topic: opts.topic, list: opts.list, listIds: listIds(), source: opts.source || 'zelf', from: opts.from, by: me() });
+  if (!body) { if (!opts.quiet) toast('Dat weet Samenlijst al.'); return null; }
+  const id = newId('kb');
+  const m: Memory = { ...body, id };
+  setS({ memory: [m, ...S().memory] });
   write(() => setDoc(kbRef(id), body));
+  return m;
 }
-export function forget(key: string) {
-  const e = S().kb.get(key); if (!e) return;
-  const kb = new Map(S().kb); kb.delete(key); setS({ kb });
-  write(() => deleteDoc(kbRef(e.id)));
+export function rewordMemory(id: string, text: string) {
+  const t = text.trim().replace(/\s+/g, ' ').slice(0, 160);
+  const m = S().memory.find(x => x.id === id);
+  if (!m || t.length < 3 || t === m.text) return;
+  setS({ memory: S().memory.map(x => x.id === id ? { ...x, text: t, at: Date.now() } : x) });
+  write(() => updateDoc(kbRef(id), { text: t, at: Date.now(), by: me() }));
+}
+export function forgetMemory(id: string) {
+  const m = S().memory.find(x => x.id === id); if (!m) return;
+  setS({ memory: S().memory.filter(x => x.id !== id) });
+  write(() => deleteDoc(kbRef(id)));
+  toast('Vergeten', 'Ongedaan maken', () => { const { id: _, ...body } = m; setS({ memory: [m, ...S().memory] }); write(() => setDoc(kbRef(id), body)); });
+}
+/** Remove the single items the former knowledge base kept; the memory itself stays. */
+export function clearOldKb() {
+  const ids = S().oldKb; if (!ids.length) return;
+  setS({ oldKb: [] });
+  ids.forEach(id => write(() => deleteDoc(kbRef(id))));
+  toast(`${ids.length} losse items uit de oude kennisbank opgeruimd`);
+}
+
+/* Each correction or choice may teach a general rule; Gemini decides whether it does. Batched, in the background. */
+const lessons: string[] = [];
+let learning: ReturnType<typeof setTimeout> | null = null;
+export function learnFrom(event: string) {
+  if (!S().aiOn || S().readOnly || !event) return;
+  lessons.push(event.slice(0, 300));
+  if (!learning) learning = setTimeout(runLessons, 4000);
+}
+async function runLessons() {
+  learning = null;
+  const events = lessons.splice(0, 6);
+  if (!events.length) return;
+  try {
+    const lists = S().lists.map(l => ({ id: l.id, name: l.name, kind: l.kind }));
+    const rules = cleanRules(await post('learn', { lists, memory: memoryForAi(), events }));
+    const saved = rules.map(r => remember(r.text, { topic: r.topic, list: r.list, source: 'geleerd', from: events.join(' · '), quiet: true })).filter((m): m is Memory => !!m);
+    if (saved.length === 1) toast(`Onthouden: ${saved[0].text}`, 'Vergeet', () => forgetMemory(saved[0].id));
+    else if (saved.length > 1) toast(`${saved.length} voorkeuren onthouden`, 'Bekijk', () => setS({ sheet: { kind: 'kb' } }));
+  } catch (e) { console.warn(e); }
+  if (lessons.length && !learning) learning = setTimeout(runLessons, 4000);
 }
 
 /* ---------- Items ---------- */
@@ -51,11 +98,10 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
     if (qty && qty !== same.qty) write(() => updateDoc(itemRef(same.id), { qty }));
     return { id: same.id, status: 'dup' };
   }
-  // Groceries: where is it bought? What the household told us wins, then a confident AI; when the AI doubts, ask.
+  // Groceries: where is it bought? Where they bought it before wins, then a confident AI (which knows the memory); when it doubts, ask.
   const where = list.kind === 'shop'
-    ? decideStore(S().kb.get(key)?.store, opts.aiStore ? { store: opts.store, conf: opts.storeConf } : null)
+    ? decideStore(knownStore(text, S().items), opts.aiStore ? { store: opts.store, conf: opts.storeConf } : null)
     : { store: null, ask: false, guess: null };
-  learn(text, listId, { weight: opts.weight || 1, store: where.store });
   if (same && same.done) {
     const patch: Partial<Item> = { done: false, doneBy: null, doneAt: null, addedBy: me(), createdAt: Date.now() };
     if (qty) patch.qty = qty;
@@ -65,7 +111,7 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
   }
   const id = newId('items');
   const body: Omit<Item, 'id'> = {
-    listId, text, qty, note: String(opts.note || '').slice(0, 140), cat: list.kind === 'shop' ? pickCat(text, S().kb, opts.cat) : null,
+    listId, text, qty, note: String(opts.note || '').slice(0, 140), cat: list.kind === 'shop' ? pickCat(text, S().items, opts.cat) : null,
     done: false, doneBy: null, doneAt: null, urgent: false, due: list.kind === 'todo' ? due : null, assignee: null,
     addedBy: me(), createdAt: Date.now(),
   };
@@ -77,30 +123,29 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
 }
 
 /* ---------- Waar koop je dit? ---------- */
-/** Shops this household uses, from what it taught and what is on the lists. */
+/** Shops this household uses, from what is on the lists. */
 export function usedStores(): string[] {
-  return [...[...S().kb.values()].map(e => e.store), ...S().items.map(i => i.store)].filter((x): x is string => !!x);
+  return S().items.map(i => i.store).filter((x): x is string => !!x);
 }
 function askStore(itemId: string, listId: string, text: string, guess: string | null) {
   const ask: StoreAsk = { aid: newId('items'), itemId, listId, text, guess, options: storeOptions(guess, usedStores()) };
   setS({ storeAsks: [...S().storeAsks.filter(a => a.itemId !== itemId), ask] });
 }
-/** The answer goes on the item and into the knowledge base, so next time it is known. */
+/** The answer goes on the item; Gemini may make a general rule of it ("Dierenvoer koop je bij de dierenwinkel"). */
 export function answerStore(aid: string, store: string | null) {
   const a = S().storeAsks.find(x => x.aid === aid); if (!a) return;
   setS({ storeAsks: S().storeAsks.filter(x => x.aid !== aid) });
   const n = normStore(store); if (!n) return;
   const it = S().items.find(i => i.id === a.itemId);
   if (it) write(() => updateDoc(itemRef(it.id), { store: n }));
-  learn(it?.text || a.text, null, { store: n });
-  if (!isSuper(n)) toast(`Onthouden: ${it?.text || a.text} koop je bij de ${n.toLowerCase()}`);
+  learnFrom(`Gevraagd waar "${it?.text || a.text}" gekocht wordt; antwoord: ${n}${a.guess && normStore(a.guess) !== n ? ` (Gemini dacht ${a.guess})` : ''}.`);
 }
-/** Change where an item is bought (item sheet): also a lesson for the knowledge base. */
+/** Change where an item is bought (item sheet): may teach a general rule. */
 export function setStore(itemId: string, store: string | null) {
   const it = S().items.find(i => i.id === itemId); if (!it) return;
   const n = normStore(store) || 'Supermarkt';
   write(() => updateDoc(itemRef(itemId), { store: n }));
-  learn(it.text, null, { store: n });
+  learnFrom(`"${it.text}" aangepast: kopen bij ${n} in plaats van ${normStore(it.store) || 'Supermarkt'}.`);
   setS({ storeAsks: S().storeAsks.filter(a => a.itemId !== itemId) });
 }
 
@@ -141,17 +186,17 @@ export function moveItem(itemId: string, toId: string) {
   const it = S().items.find(i => i.id === itemId), to = listById(toId);
   if (!it || !to || it.listId === toId) return;
   const from = it.listId;
-  learn(it.text, toId, { weight: 2, from });
+  learnFrom(`"${it.text}" verplaatst van de lijst "${listById(from)?.name || ''}" naar "${to.name}".`);
   const twin = listItems(toId).find(i => !i.done && i.id !== itemId && kbKey(i.text) === kbKey(it.text));
   setS({ receipt: S().receipt.map(r => r.itemId === itemId ? { ...r, listId: toId, why: 'user' as RouteWhy, itemId: twin ? twin.id : r.itemId } : r) });
   if (twin) {
     write(() => deleteDoc(itemRef(itemId)));
     toast(`${it.text} stond al op ${to.name}`);
   } else {
-    const patch: Partial<Item> = { listId: toId, cat: to.kind === 'shop' ? catFor(it.text, S().kb) : null };
+    const patch: Partial<Item> = { listId: toId, cat: to.kind === 'shop' ? catFor(it.text, S().items) : null };
     if (to.kind !== 'todo') { patch.due = null; patch.assignee = null; }
     write(() => updateDoc(itemRef(itemId), patch));
-    toast(`Verplaatst naar ${to.name}. Onthouden voor de volgende keer.`);
+    toast(`Verplaatst naar ${to.name}`);
   }
 }
 
@@ -171,12 +216,11 @@ export function addMany(listId: string, entries: Pick<Suggestion, 'text' | 'qty'
     const id = newId('items');
     const body: Omit<Item, 'id'> = {
       listId, text: e.text, qty: e.qty || '', note: e.note || notePrefix || '',
-      cat: list.kind === 'shop' ? (e.cat || catFor(e.text, S().kb)) : null,
+      cat: list.kind === 'shop' ? (e.cat || catFor(e.text, S().items)) : null,
       done: false, doneBy: null, doneAt: null, urgent: false, due: list.kind === 'todo' ? (e.due || null) : null, assignee: null,
       addedBy: me(), createdAt: t0 + n,
     };
     write(() => setDoc(itemRef(id), body)); created.push(id);
-    learn(e.text, listId, { cat: list.kind === 'shop' && e.cat && e.cat !== guessCat(e.text) ? e.cat : null });
   });
   const n = created.length + revived;
   if (!n) { toast('Alles stond al op de lijst'); return; }
@@ -195,7 +239,7 @@ export function createList(name: string, kind: ListKind) {
 }
 export function updateList(id: string, patch: Partial<List>) {
   write(() => updateDoc(listRef(id), patch));
-  if (patch.kind === 'shop') listItems(id).filter(i => !i.cat).forEach(i => write(() => updateDoc(itemRef(i.id), { cat: catFor(i.text, S().kb) })));
+  if (patch.kind === 'shop') listItems(id).filter(i => !i.cat).forEach(i => write(() => updateDoc(itemRef(i.id), { cat: catFor(i.text, S().items) })));
 }
 export function deleteList(id: string) {
   listItems(id).forEach(i => write(() => deleteDoc(itemRef(i.id))));
@@ -223,15 +267,13 @@ export function go(view: string) {
 }
 
 /* ---------- Quick add: one box for every list ---------- */
-function place(p: Entry, listId: string, why: RouteWhy, weight: number): Receipt | null {
+function place(p: Entry, listId: string, why: RouteWhy): Receipt | null {
   const l = listById(listId); if (!l) return null;
   const r = addItem(listId, (p.qty ? p.qty + ' ' : '') + p.text, {
-    due: l.kind === 'todo' ? p.due : null, quiet: true, weight, note: p.note, cat: p.cat,
+    due: l.kind === 'todo' ? p.due : null, quiet: true, note: p.note, cat: p.cat,
     store: p.store, storeConf: p.storeConf, aiStore: p.store !== undefined,
   });
   if (!r) return null;
-  // Also remember what was literally typed, so the same words route straight away next time.
-  if (p.raw && r.status !== 'dup' && kbKey(p.raw) !== kbKey(p.text)) learn(p.raw, listId, { weight });
   return { itemId: r.id, listId, why: r.status === 'dup' ? 'dup' : why };
 }
 const pushReceipt = (rs: Receipt[]) =>
@@ -243,12 +285,12 @@ export function quickAdd(raw: string) {
 
 /* ---------- Every new item is analysed by AI first ----------
  * Gemini cleans up the name, pulls out amount, date and details, picks the aisle,
- * splits "melk en eieren" and proposes a list. What the household taught the
- * knowledge base (choices and corrections) still decides the list when it knows.
+ * splits "melk en eieren" and proposes a list, following the household's memory
+ * (general preferences). What the lists themselves show (it was on a list before) still decides when it is clear.
  * Without AI, or when it fails, the local rules take over: adding never blocks. */
 function ruleRoute(p: Entry, placed: Receipt[], unsure: Pending[]) {
-  const r = route(p, S().lists, S().items, S().kb);
-  if (r.listId) { const x = place(p, r.listId, r.why, 1); if (x) placed.push(x); }
+  const r = route(p, S().lists, S().items);
+  if (r.listId) { const x = place(p, r.listId, r.why); if (x) placed.push(x); }
   else unsure.push({ ...p, ranking: r.ranking, guess: r.guess || null, guessBy: r.guess ? 'rule' : null });
 }
 
@@ -258,7 +300,7 @@ async function analyze(entries: Entry[], fixedList: string | null): Promise<Reco
   try {
     const lists = S().lists.map(l => ({ id: l.id, name: l.name, kind: l.kind, examples: listExamples(l.id) }));
     const stores = [...new Set(usedStores().map(normStore).filter((x): x is string => !!x && !isSuper(x)))].slice(0, 12);
-    const data = await post('analyze', { lists, fixedList, learned: kbHints(), stores, items: entries.map(p => p.raw || p.text), today: todayLong() });
+    const data = await post('analyze', { lists, fixedList, memory: memoryForAi(), stores, items: entries.map(p => p.raw || p.text), today: todayLong() });
     return cleanAnalysis(data, entries.length);
   } catch (e) {
     toast((e as Error).message);
@@ -281,12 +323,12 @@ export async function quickAddEntries(entries: Entry[], opts: { analyzed?: boole
     outs.forEach((o, k) => {
       const text = o.text || part.text, due = o.due || part.due;
       const p: Entry = { ...part, pid: `${part.pid}-${k}`, text, qty: o.qty || part.qty, due, hasDate: !!due, key: kbKey(text), note: o.note, cat: o.cat, store: o.store, storeConf: o.storeConf };
-      if (has(part.explicit)) { const x = place(p, part.explicit, 'explicit', 1); if (x) placed.push(x); return; }
-      const r = route(p, S().lists, S().items, S().kb);
+      if (has(part.explicit)) { const x = place(p, part.explicit, 'explicit'); if (x) placed.push(x); return; }
+      const r = route(p, S().lists, S().items);
       const aiList = has(o.list) ? o.list : null;
-      if (r.listId && (r.why === 'kb' || r.why === 'dup' || r.why === 'only')) { const x = place(p, r.listId, r.why, 1); if (x) placed.push(x); }
-      else if (aiList && o.confidence >= 0.75) { const x = place(p, aiList, 'ai', 1); if (x) placed.push(x); }
-      else if (r.listId) { const x = place(p, r.listId, r.why, 1); if (x) placed.push(x); }
+      if (r.listId && (r.why === 'hist' || r.why === 'dup' || r.why === 'only')) { const x = place(p, r.listId, r.why); if (x) placed.push(x); }
+      else if (aiList && o.confidence >= 0.75) { const x = place(p, aiList, 'ai'); if (x) placed.push(x); }
+      else if (r.listId) { const x = place(p, r.listId, r.why); if (x) placed.push(x); }
       else {
         const ranking = aiList ? [aiList, ...r.ranking.filter(id => id !== aiList)] : r.ranking;
         unsure.push({ ...p, ranking, guess: aiList || r.guess || null, guessBy: aiList ? 'ai' : r.guess ? 'rule' : null });
@@ -309,34 +351,14 @@ export async function listAdd(listId: string, raw: string) {
     if (!outs?.length) { addItem(listId, (part.qty ? part.qty + ' ' : '') + part.text, { due: part.due }); return; }
     outs.forEach(o => {
       const text = o.text || part.text, qty = o.qty || part.qty;
-      const r = addItem(listId, (qty ? qty + ' ' : '') + text, { due: o.due || part.due, note: o.note, cat: o.cat, store: o.store, storeConf: o.storeConf, aiStore: true });
-      if (r && r.status !== 'dup' && kbKey(part.raw) !== kbKey(text)) learn(part.raw, listId);
+      addItem(listId, (qty ? qty + ' ' : '') + text, { due: o.due || part.due, note: o.note, cat: o.cat, store: o.store, storeConf: o.storeConf, aiStore: true });
     });
   });
 }
 
-/** Recent choices the household made, so the AI follows them. */
-function kbHints(): string[] {
-  const out: string[] = [];
-  for (const e of [...S().kb.values()].sort((a, b) => (b.at || 0) - (a.at || 0))) {
-    const best = Object.entries(e.lists || {}).filter(([id]) => listById(id)).sort((a, b) => b[1] - a[1])[0];
-    const shop = e.store && !isSuper(e.store) ? e.store : null;
-    if (!best && !e.cat && !shop) continue;
-    out.push(`${e.text}${best ? ' → ' + listById(best[0])!.name : ''}${e.cat ? ' (' + CAT_LABEL[e.cat] + ')' : ''}${shop ? ' [' + shop + ']' : ''}`);
-    if (out.length >= 40) break;
-  }
-  return out;
-}
-
 function listExamples(id: string) {
   const out = new Set<string>();
-  for (const e of S().kb.values()) {
-    const vals = Object.values(e.lists || {});
-    const n = (e.lists || {})[id] || 0;
-    if (n && n === Math.max(...vals)) out.add(e.text);
-    if (out.size >= 10) break;
-  }
-  (listById(id)?.recent || []).forEach(t => out.size < 14 && out.add(t));
+  (listById(id)?.recent || []).forEach(t => out.size < 12 && out.add(t));
   listItems(id).forEach(i => out.size < 18 && out.add(i.text));
   return [...out].slice(0, 18);
 }
@@ -344,14 +366,17 @@ function listExamples(id: string) {
 export function answerPending(pid: string, listId: string | null) {
   const p = S().pending.find(x => x.pid === pid); if (!p) return;
   setS({ pending: S().pending.filter(x => x.pid !== pid) });
-  if (listId) { const x = place(p, listId, 'user', 2); if (x) pushReceipt([x]); }
+  if (!listId) return;
+  const x = place(p, listId, 'user'); if (x) pushReceipt([x]);
+  const to = listById(listId)?.name || '', guess = p.guess && p.guess !== listId ? listById(p.guess)?.name : null;
+  learnFrom(`Gemini twijfelde waar "${p.text}" op moest${guess ? ` (dacht "${guess}")` : ''}; gekozen: de lijst "${to}".`);
 }
 
-/** Pick from the knowledge-base suggestion strip on the home screen. */
+/** Pick from the suggestion strip on the home screen (things that were on a list before). */
 export function quickPick(typed: string, text: string, listId: string) {
   const p = prepEntry(typed || text, S().lists);
   p.text = text; p.key = kbKey(text);
-  const x = place(p, listId, 'kb', 1);
+  const x = place(p, listId, 'hist');
   if (x) pushReceipt([x]);
 }
 
@@ -393,10 +418,10 @@ export async function smartSuggest(mode: 'add' | 'forgot', listId: string, text:
   const open = listItems(listId).filter(i => !i.done);
   const openTxt = open.map(i => (i.qty ? i.qty + ' ' : '') + i.text);
   if (mode === 'forgot') {
-    const data = await post('forgot', { open: openTxt, recent: (l.recent || []).slice(0, 30) }, signal);
+    const data = await post('forgot', { open: openTxt, recent: (l.recent || []).slice(0, 30), memory: memoryForAi() }, signal);
     return cleanShop(data, open);
   }
-  const data = await post('smart-add', { kind: l.kind, text: text.slice(0, 6000), image, existing: openTxt, today: todayLong() }, signal);
+  const data = await post('smart-add', { kind: l.kind, text: text.slice(0, 6000), image, existing: openTxt, memory: memoryForAi(), today: todayLong() }, signal);
   return l.kind === 'shop' ? cleanShop(data, open) : cleanTodo(data, open);
 }
 
@@ -408,7 +433,7 @@ export async function sortOverig(listId: string) {
     let moved = 0;
     items.forEach((i, n) => {
       const c = map[n];
-      if (c && c !== 'overig') { moved++; write(() => updateDoc(itemRef(i.id), { cat: c })); learn(i.text, null, { cat: c }); }
+      if (c && c !== 'overig') { moved++; write(() => updateDoc(itemRef(i.id), { cat: c })); }
     });
     toast(moved ? `${moved} ${moved === 1 ? 'item' : 'items'} naar de juiste afdeling` : 'Deze items horen echt bij Overig');
   } catch (e) { toast((e as Error).message); }
@@ -440,6 +465,7 @@ export function submitAnswers(id: string, skip: boolean) {
   const extra = skip ? '' : sel.extra.trim().slice(0, 200);
   setS({ planOpen: [...S().planOpen.filter(x => x !== id), id] });
   startJob({ id, mode: 'plan', answers, extra, force: true });
+  if (answers.length || extra) learnFrom(`Bij de taak "${it.text}" vertelden ze: ${[...answers.map(a => `${a.q} ${a.a}`), extra ? `verder: ${extra}` : ''].filter(Boolean).join('; ')}.`);
 }
 export function pickAnswer(id: string, qi: number, oi: number) {
   const q = S().items.find(i => i.id === id)?.planQ?.questions[qi]; if (!q) return;
@@ -470,7 +496,7 @@ async function taskFor(id: string, fallbackText?: string) {
   const text = it?.text || fallbackText; if (!text) return null;
   const l = it ? listById(it.listId) : undefined;
   const others = it ? listItems(it.listId).filter(i => !i.done && i.id !== id).map(i => i.text).slice(0, 25) : [];
-  return { listName: l?.name || '', task: text, note: it?.note || '', due: it?.due || null, others, today: todayLong() };
+  return { listName: l?.name || '', task: text, note: it?.note || '', due: it?.due || null, others, memory: memoryForAi(), today: todayLong() };
 }
 /** force = someone asked for it (pencil › Werk uit, Opnieuw uitwerken); otherwise the AI may decide it is not worth it. */
 async function askQuestions(id: string, fallbackText?: string, force = false) {
@@ -532,3 +558,28 @@ export const togglePlanOpen = (id: string) =>
 
 export const today = todayISO;
 export const CAT_OPTIONS = CATS.map(([id, label]) => ({ id, label }));
+
+/* ---------- Aanbiedingen: supermarket offers near the household's place ----------
+ * Gemini searches Google (grounding), so the offers are this week's. Matches with the shopping list come first. */
+export async function findOffers(place: string, listId: string | null) {
+  const p = place.trim().slice(0, 80);
+  if (!p) { toast('Kies eerst een plaats.'); return; }
+  if (S().offersBusy) return;
+  const h = S().households.find(x => x.id === S().hid);
+  if (h && (h.place || '') !== p && !S().readOnly) write(() => updateDoc(hRef(h.id), { place: p }));
+  const open = (listId ? listItems(listId) : S().items.filter(i => listById(i.listId)?.kind === 'shop')).filter(i => !i.done).map(i => i.text).slice(0, 60);
+  setS({ offersBusy: true });
+  try {
+    const raw = await post<Record<string, unknown>>('offers', { place: p, open, memory: memoryForAi(), today: todayLong() });
+    const c = cleanOffers(raw);
+    const src = Array.isArray(raw?._sources) ? (raw!._sources as { title?: unknown; uri?: unknown }[]) : [];
+    const sources = src.map(x => ({ title: String(x?.title || '').slice(0, 80), uri: String(x?.uri || '') })).filter(x => /^https?:\/\//.test(x.uri)).slice(0, 8);
+    const result: OfferResult = { place: p, ...c, sources, searchHtml: typeof raw?._searchHtml === 'string' ? raw._searchHtml.slice(0, 20000) : '', at: Date.now() };
+    setS({ offers: result });
+    if (!c.offers.length) toast(`Geen aanbiedingen gevonden voor ${p}. Probeer een grotere plaats in de buurt.`);
+  } catch (e) {
+    toast((e as Error).message);
+  } finally {
+    setS({ offersBusy: false });
+  }
+}

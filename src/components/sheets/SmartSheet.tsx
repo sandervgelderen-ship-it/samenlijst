@@ -69,7 +69,7 @@ export default function SmartSheet({ mode, listId }: { mode: 'add' | 'forgot'; l
         : <>
           <div className="aires">
             {results.map((r, n) => {
-              const sub = shop ? [r.cat ? CAT_LABEL[r.cat] : '', r.pantry ? 'heb je vaak al in huis' : '', r.why].filter(Boolean) : [r.due ? dueInfo(r.due).label : '', r.note].filter(Boolean);
+              const sub = shop ? [r.cat ? CAT_LABEL[r.cat] : '', r.note, r.pantry ? 'heb je vaak al in huis' : '', r.why].filter(Boolean) : [r.due ? dueInfo(r.due).label : '', r.note].filter(Boolean);
               return (
                 <label className="airow" key={n}>
                   <input type="checkbox" checked={r.on} onChange={() => toggle(n)} />

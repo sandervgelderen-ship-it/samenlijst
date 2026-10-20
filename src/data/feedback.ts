@@ -96,7 +96,7 @@ export function captureContext(): FeedbackContext {
     lists: s.lists.length,
     items: s.items.length,
     openItems: open.length,
-    kb: s.kb.size,
+    kb: s.memory.length,
     screens: diagnosticsSnapshot().screens,
   };
 }
@@ -147,7 +147,7 @@ export function feedbackAsText(f: Feedback): string {
     `Scherm: ${c.screen ?? '?'}${c.list ? ` (${c.list})` : ''}${c.sheet ? ` · venster: ${c.sheet}` : ''} · Versie: ${c.version ?? '?'} · Adres: ${c.host ?? '?'}`,
     `Toestel: ${c.viewport ?? '?'} @${c.pixelRatio ?? 1}x · ${c.installed ? 'geïnstalleerd' : 'in de browser'} · ${c.online === false ? 'offline' : 'online'} · ${c.language ?? '?'} · ${c.timeZone ?? '?'}`,
     `User agent: ${c.userAgent ?? '?'}`,
-    `Huishouden: ${c.members ?? '?'} leden, ${c.lists ?? '?'} lijsten, ${c.openItems ?? '?'} van ${c.items ?? '?'} items open, kennisbank ${c.kb ?? '?'} · AI ${c.aiOn ? 'aan' : 'uit'}${c.access ? ` · toegang: ${c.access}` : ''}`,
+    `Huishouden: ${c.members ?? '?'} leden, ${c.lists ?? '?'} lijsten, ${c.openItems ?? '?'} van ${c.items ?? '?'} items open, geheugen ${c.kb ?? '?'} · AI ${c.aiOn ? 'aan' : 'uit'}${c.access ? ` · toegang: ${c.access}` : ''}`,
   ];
   if (screens.length) lines.push(`Laatste schermen: ${screens.map(s => `${s.screen} (${time(s.at).slice(11)})`).join(' → ')}`);
   lines.push('', f.logs?.length ? `Recente fouten en waarschuwingen (${f.logs.length}):` : 'Geen recente fouten of waarschuwingen.');

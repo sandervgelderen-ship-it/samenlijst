@@ -1,9 +1,10 @@
 /**
  * Pure list logic: Dutch supermarket aisles, quantity and date parsing,
- * the knowledge base keys and the routing score that decides which list
- * a quick-added entry goes to. No Firebase, no React: tested in scripts/test-domain.ts.
+ * the routing score that decides which list a quick-added entry goes to,
+ * and the household memory (general preferences, never single items).
+ * No Firebase, no React: tested in scripts/test-domain.ts.
  */
-import type { CatId, ColorName, Entry, Item, KbEntry, List, RouteWhy } from '../types';
+import type { CatId, ColorName, Entry, Item, List, Memory, RouteWhy } from '../types';
 
 /* ---------- Aisles ---------- */
 export const CATS: [CatId, string, string][] = [
@@ -39,13 +40,6 @@ export const norm = (s: string) => String(s || '').toLowerCase().normalize('NFD'
 export const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 export const kbKey = (text: string) => norm(String(text || '')).replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, ' ').trim();
 
-/** Firestore-safe document id for a knowledge-base key. */
-export function kbId(key: string): string {
-  let h = 2166136261;
-  for (let n = 0; n < key.length; n++) { h ^= key.charCodeAt(n); h = Math.imul(h, 16777619); }
-  return 'k-' + key.replace(/[^a-z0-9_\-]/g, '-').replace(/-+/g, '-').slice(0, 80) + '-' + (h >>> 0).toString(36);
-}
-
 export function guessCat(text: string): CatId {
   const t = norm(text);
   const words = t.split(/[\s\-,]+/);
@@ -60,18 +54,31 @@ export function guessCat(text: string): CatId {
   return best || 'overig';
 }
 
-/** Aisle for an item: one someone set in the knowledge base wins, then the AI's aisle, then the keyword guess. */
-export function pickCat(text: string, kb: Map<string, KbEntry>, aiCat?: CatId | null): CatId {
-  const e = kb.get(kbKey(text));
-  if (e && isCat(e.cat)) return e.cat;
+type Known = Pick<Item, 'text' | 'cat' | 'createdAt'> & { store?: string | null };
+/** The newest item with the same name that the household already had: its aisle or shop is what they chose before. */
+function lastSame(text: string, history: Known[], has: (i: Known) => boolean): Known | undefined {
+  const key = kbKey(text);
+  let best: Known | undefined;
+  for (const i of history) if (kbKey(i.text) === key && has(i) && (!best || (i.createdAt || 0) > (best.createdAt || 0))) best = i;
+  return best;
+}
+
+/** Aisle for an item: the aisle it had before on the lists wins, then the AI's aisle, then the keyword guess. */
+export function pickCat(text: string, history: Known[], aiCat?: CatId | null): CatId {
+  const e = lastSame(text, history, i => isCat(i.cat) && i.cat !== 'overig');
+  if (e) return e.cat as CatId;
   if (aiCat && isCat(aiCat) && aiCat !== 'overig') return aiCat;
   return guessCat(text);
 }
 
-/** Aisle for an item: an aisle someone set in the knowledge base wins over the keyword guess. */
-export function catFor(text: string, kb: Map<string, KbEntry>): CatId {
-  const e = kb.get(kbKey(text));
-  return e && isCat(e.cat) ? e.cat : guessCat(text);
+/** Aisle for an item without AI: the aisle it had before wins over the keyword guess. */
+export function catFor(text: string, history: Known[]): CatId {
+  return pickCat(text, history, null);
+}
+
+/** Where the household bought this item before (from the lists themselves), if anywhere. */
+export function knownStore(text: string, history: Known[]): string | null {
+  return normStore(lastSame(text, history, i => !!normStore(i.store))?.store);
 }
 
 const UNITS = 'x|st|stuks?|kg|kilo|g|gr|gram|l|liter|ml|pak|pakken|zak|zakken|blik|blikken|fles|flessen|pot|potten|bos|bossen|doos|dozen|krat|kratten|tros|net|bak|bakjes?|rol|rollen';
@@ -146,11 +153,6 @@ const TODO_WORDS = new Set(('bellen mailen appen regelen maken ophalen wegbrenge
   'afspraak tandarts huisarts dokter kapper garage apk belasting belastingaangifte verzekering factuur rekening gemeente paspoort rijbewijs verjaardag cadeau school ouderavond zwemles').split(' '));
 export const isTodoish = (text: string) => kbKey(text).split(' ').some(w => TODO_WORDS.has(w));
 
-export function kbFuzzy(a: string, b: string): boolean {
-  const wa = a.split(' ').filter(w => w.length >= 4), wb = b.split(' ').filter(w => w.length >= 4);
-  return wa.some(x => wb.some(y => x === y || (x.length >= 5 && y.length >= 5 && (x.startsWith(y) || y.startsWith(x)))));
-}
-
 export function findList(name: string, lists: List[]): string | null {
   const n = norm(name).replace(/[^a-z0-9]/g, '');
   if (!n) return null;
@@ -177,7 +179,7 @@ export function prepEntry(part: string, lists: List[], now = new Date()): Entry 
 export interface RouteResult { listId: string | null; ranking: string[]; guess?: string | null; why: RouteWhy }
 
 /** Score every list for one entry; only route automatically when the evidence clearly points one way. */
-export function route(p: Entry, lists: List[], items: Item[], kb: Map<string, KbEntry>): RouteResult {
+export function route(p: Entry, lists: List[], items: Item[]): RouteResult {
   const ids = lists.map(l => l.id);
   const has = new Set(ids);
   if (!lists.length) return { listId: null, ranking: [], why: 'nolists' };
@@ -186,15 +188,13 @@ export function route(p: Entry, lists: List[], items: Item[], kb: Map<string, Kb
   if (lists.length === 1) return { listId: ids[0], ranking: ids, why: 'only' };
 
   const sc: Record<string, number> = {};
-  let kbHit = false;
+  let hist = false;
   const bump = (id: string, v: number) => { if (has.has(id) && v > 0) sc[id] = (sc[id] || 0) + v; };
-  const e = kb.get(p.key);
-  if (e) for (const [id, n] of Object.entries(e.lists || {})) { bump(id, 3 * Math.min(n, 5)); kbHit = true; }
-  for (const [k, ent] of kb) if (k !== p.key && kbFuzzy(k, p.key)) for (const [id, n] of Object.entries(ent.lists || {})) { bump(id, Math.min(n, 3)); kbHit = true; }
-  for (const l of lists) if ((l.recent || []).some(t => kbKey(t) === p.key)) bump(l.id, 3);
-  for (const i of items) if (i.done && kbKey(i.text) === p.key) bump(i.listId, 3);
+  // What the lists themselves show: it was on a list before (recently cleared or ticked off).
+  for (const l of lists) if ((l.recent || []).some(t => kbKey(t) === p.key)) { bump(l.id, 3); hist = true; }
+  for (const i of items) if (i.done && kbKey(i.text) === p.key) { bump(i.listId, 3); hist = true; }
   const todoish = isTodoish(p.text) || p.hasDate;
-  if (!todoish && catFor(p.text, kb) !== 'overig') lists.filter(l => l.kind === 'shop').forEach(l => bump(l.id, 1.5));
+  if (!todoish && guessCat(p.text) !== 'overig') lists.filter(l => l.kind === 'shop').forEach(l => bump(l.id, 1.5));
   if (todoish) lists.filter(l => l.kind === 'todo').forEach(l => bump(l.id, p.hasDate ? 2 : 1.5));
 
   const ranked = Object.keys(sc).sort((a, b) => sc[b] - sc[a]);
@@ -202,27 +202,50 @@ export function route(p: Entry, lists: List[], items: Item[], kb: Map<string, Kb
   if (!ranked.length) return { listId: null, ranking, why: 'unknown' };
   const top = sc[ranked[0]], sum = ranked.reduce((s, id) => s + sc[id], 0);
   const sure = (ranked.length === 1 && top >= 1.5) || (top >= 3 && top / sum >= 0.75);
-  return { listId: sure ? ranked[0] : null, ranking, guess: ranked[0], why: kbHit ? 'kb' : 'rule' };
+  return { listId: sure ? ranked[0] : null, ranking, guess: ranked[0], why: hist ? 'hist' : 'rule' };
 }
 
-/** New knowledge-base entry after a signal. weight 1 = gewoon toegevoegd, 2 = bewuste keuze; from = de lijst waar het ten onrechte stond. */
-export function learnEntry(
-  old: KbEntry | undefined, text: string, listId: string | null,
-  opts: { weight?: number; from?: string | null; cat?: string | null; store?: string | null; by: string | null; listIds: Set<string> },
-): Omit<KbEntry, 'id'> & { id: string } | null {
-  const key = kbKey(text);
-  if (!key || key.length > 120) return null;
-  const lists: Record<string, number> = { ...(old?.lists || {}) };
-  const weight = opts.weight ?? 1;
-  if (listId) lists[listId] = Math.min(20, (lists[listId] || 0) + weight);
-  if (opts.from && opts.from !== listId) {
-    const v = (lists[opts.from] || 0) - 2;
-    if (v > 0) lists[opts.from] = v; else delete lists[opts.from];
-  }
-  for (const id of Object.keys(lists)) if (!opts.listIds.has(id)) delete lists[id];
-  const cat = isCat(opts.cat) ? opts.cat : (old?.cat ?? null);
-  const store = normStore(opts.store) ?? old?.store ?? null;
-  return { id: old?.id || kbId(key), key, text: cap(String(text).trim()).slice(0, 120), lists, cat, store, at: Date.now(), by: opts.by };
+/* ---------- Geheugen: general preferences, never single items ---------- */
+/** "onthoud: schoonmaakmiddel altijd ecologisch" typed in the add bar: the rule to remember, or null. */
+export function parseRemember(raw: string): string | null {
+  const m = String(raw || '').trim().match(/^(?:onthoud|onthou|geheugen|voorkeur)\s*(?:[:\-–]\s*|dat\s+|\s)(.+)$/i);
+  const t = m ? m[1].trim() : '';
+  return t.length >= 3 ? cap(t).slice(0, 160) : null;
+}
+
+/**
+ * Is this a general rule rather than a single product or task? A rule says something about a kind of
+ * thing ("Schoonmaakproducten moeten ecologisch zijn"); "Toiletreiniger" or "Melk → Boodschappen" is an item.
+ */
+export function isRule(text: string): boolean {
+  const t = String(text || '').trim();
+  if (t.length < 8 || t.length > 160) return false;
+  if (/(→|->|=>)/.test(t)) return false;
+  return kbKey(t).split(' ').filter(Boolean).length >= 3;
+}
+
+/** A clean memory entry, or null when it is not a rule or the memory already says it. */
+export function makeMemory(
+  text: unknown, existing: Pick<Memory, 'text'>[],
+  opts: { topic?: unknown; list?: unknown; listIds: Set<string>; source: Memory['source']; from?: string; by: string | null; now?: number },
+): Omit<Memory, 'id'> | null {
+  const t = cap(String(text ?? '').trim().replace(/\s+/g, ' ').replace(/[.]+$/, '')).slice(0, 160);
+  if (!isRule(t) && !(opts.source === 'zelf' && t.length >= 3)) return null;
+  const key = kbKey(t);
+  if (existing.some(m => kbKey(m.text) === key)) return null;
+  const list = typeof opts.list === 'string' && opts.listIds.has(opts.list) ? opts.list : null;
+  return {
+    kind: 'rule', text: t, topic: cap(String(opts.topic ?? '').trim()).slice(0, 30), list,
+    source: opts.source, from: String(opts.from || '').slice(0, 300), at: opts.now ?? Date.now(), by: opts.by,
+  };
+}
+
+/** The memory as lines for a prompt, newest first. */
+export function memoryLines(memory: Pick<Memory, 'text' | 'list' | 'at'>[], lists: Pick<List, 'id' | 'name'>[], max = 40): string[] {
+  return [...memory].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, max).map(m => {
+    const l = m.list ? lists.find(x => x.id === m.list) : null;
+    return l ? `${m.text} (lijst "${l.name}", id "${l.id}")` : m.text;
+  });
 }
 
 /* ---------- Where to buy it ---------- */

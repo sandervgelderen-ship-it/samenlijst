@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Check, Pencil, Plus, ShoppingCart, Sparkles, Store } from 'lucide-react';
+import { BadgePercent, Check, Pencil, Plus, ShoppingCart, Sparkles, Store } from 'lucide-react';
 import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, normStore } from '../lib/domain';
 import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
@@ -51,6 +51,9 @@ export default function ListView({ list: l }: { list: List }) {
         {l.kind === 'todo' && <button className="chip" aria-pressed={onlyMine} onClick={() => setS({ onlyMine: !onlyMine })}>Alleen voor mij</button>}
         {aiOn && !readOnly && l.kind === 'shop' && open.length >= 2 && (
           <button className="chip ai" onClick={() => setS({ sheet: { kind: 'smart', mode: 'forgot', listId: l.id } })}><Sparkles size={15} /> Wat vergeet ik?</button>
+        )}
+        {aiOn && l.kind === 'shop' && (
+          <button className="chip ai" onClick={() => setS({ sheet: { kind: 'offers', listId: l.id } })}><BadgePercent size={15} /> Aanbiedingen</button>
         )}
         {aiOn && !readOnly && l.kind === 'todo' && (
           <button className="chip ai" onClick={() => setS({ sheet: { kind: 'smart', mode: 'add', listId: l.id } })}><Sparkles size={15} /> Plan iets groots</button>

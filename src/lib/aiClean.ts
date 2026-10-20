@@ -1,6 +1,6 @@
 /** Turn whatever the AI server returned into safe, bounded data the app can store. */
-import type { CatId, Item, Plan, PlanAnswer, PlanQuestion } from '../types';
-import { cap, guessCat, isCat, kbKey } from './domain';
+import type { CatId, Item, Offer, Plan, PlanAnswer, PlanQuestion } from '../types';
+import { cap, guessCat, isCat, isRule, kbKey } from './domain';
 
 const str = (v: unknown, n: number) => String(v == null ? '' : v).trim().slice(0, n);
 const arr = (d: unknown): unknown[] => {
@@ -23,7 +23,7 @@ export function cleanShop(data: unknown, open: Pick<Item, 'text'>[]): Suggestion
     const text = cap(str(r.text, 120)); if (!text) continue;
     const k = kbKey(text); if (have.has(k) || seen.has(k)) continue; seen.add(k);
     const pantry = r.pantry === true;
-    out.push({ text, qty: str(r.qty, 24), cat: isCat(r.cat) ? r.cat : guessCat(text), due: null, note: '', why: str(r.why, 80), pantry, on: !pantry });
+    out.push({ text, qty: str(r.qty, 24), cat: isCat(r.cat) ? r.cat : guessCat(text), due: null, note: str(r.note, 140), why: str(r.why, 80), pantry, on: !pantry });
     if (out.length >= 30) break;
   }
   return out;
@@ -105,4 +105,40 @@ export function cleanAnalysis(data: unknown, count: number): Record<number, Anal
     });
   }
   return out;
+}
+
+/** Rules Gemini derived from what the household did: only general preferences, never a single item. */
+export function cleanRules(data: unknown): { text: string; topic: string; list: string | null }[] {
+  const out: { text: string; topic: string; list: string | null }[] = [];
+  const seen = new Set<string>();
+  for (const raw of arr(data)) {
+    const r = obj(raw); if (!r) continue;
+    const text = cap(str(r.text, 160).replace(/[.]+$/, ''));
+    if (!isRule(text)) continue;
+    const k = kbKey(text); if (seen.has(k)) continue; seen.add(k);
+    out.push({ text, topic: cap(str(r.topic, 30)), list: typeof r.list === 'string' && r.list ? r.list : null });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/** Offers Gemini found online: bounded, deduplicated, sorted with matches for the list first. */
+export function cleanOffers(data: unknown): { week: string; stores: string[]; offers: Offer[] } {
+  const o = (data && typeof data === 'object' && !Array.isArray(data) ? data : {}) as Record<string, unknown>;
+  const rows = Array.isArray(data) ? data : arr(o.offers);
+  const seen = new Set<string>(), offers: Offer[] = [];
+  for (const raw of rows) {
+    const r = obj(raw); if (!r) continue;
+    const product = cap(str(r.product ?? r.text, 100)), store = cap(str(r.store, 40));
+    if (!product || !store) continue;
+    const k = kbKey(store + ' ' + product); if (seen.has(k)) continue; seen.add(k);
+    offers.push({
+      store, product, deal: str(r.deal, 60), price: str(r.price, 20), until: isoDate(r.until),
+      match: cap(str(r.match, 100)), cat: isCat(r.cat) ? r.cat : guessCat(product),
+    });
+    if (offers.length >= 40) break;
+  }
+  offers.sort((a, b) => (b.match ? 1 : 0) - (a.match ? 1 : 0));
+  const stores = [...new Set([...arr(o.stores).map(x => cap(str(x, 40))).filter(Boolean), ...offers.map(x => x.store)])].slice(0, 12);
+  return { week: str(o.week, 60), stores, offers };
 }
