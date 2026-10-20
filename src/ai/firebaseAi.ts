@@ -38,7 +38,7 @@ async function generate(parts: (string | { inlineData: { mimeType: string; data:
 
 // Without a response schema, each prompt ends with the exact JSON shape we parse.
 const SHAPE: Record<string, string> = {
-  'analyze': '[{"i":0,"text":"Halfvolle melk","qty":"2 pak","note":"","cat":"zuivel","due":"","list":"<lijst-id>","confidence":0.95}]',
+  'analyze': '[{"i":0,"text":"Halfvolle melk","qty":"2 pak","note":"","cat":"zuivel","due":"","store":"Supermarkt","storeConfidence":0.95,"list":"<lijst-id>","confidence":0.95}]',
   'questions': '{"worth":true,"questions":[{"q":"Hoeveel kamers gaan er mee?","options":["1 of 2","3 of 4","5 of meer"],"multi":false}]}',
   'elaborate': '{"detail":"...","steps":[{"text":"Uitnodigingen versturen","due":""}],"tips":["..."],"buy":[{"text":"Slingers","qty":"2 st"}]}',
   'smart-add-shop': '[{"text":"Lasagnebladen","qty":"1 pak","cat":"houdbaar","pantry":false,"why":""}]',

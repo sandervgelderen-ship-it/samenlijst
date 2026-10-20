@@ -71,6 +71,8 @@ export interface Item {
   assignee: string | null;
   addedBy: string | null;
   createdAt: number;
+  /** Where it is bought when that is not the supermarket (Bouwmarkt, Drogist…); null or 'Supermarkt' = supermarket. */
+  store?: string | null;
   plan?: Plan | null;
   planQ?: PlanQuestions | null;
 }
@@ -82,6 +84,8 @@ export interface KbEntry {
   text: string;
   lists: Record<string, number>;
   cat: CatId | null;
+  /** Where the household buys this (learned from their answer or a confident AI): 'Supermarkt', 'Bouwmarkt'… */
+  store?: string | null;
   at: number;
   by: string | null;
 }
@@ -100,6 +104,9 @@ export interface Entry {
   explicit: string | null;
   note: string;
   cat: CatId | null;
+  /** From the AI analysis: where you would normally buy it, and how sure. */
+  store?: string | null;
+  storeConf?: number;
 }
 
 export interface Pending extends Entry {
@@ -112,4 +119,14 @@ export interface Receipt {
   itemId: string;
   listId: string;
   why: RouteWhy;
+}
+
+/** "Waar koop je dit?" for a grocery item when it is unclear whether it comes from the supermarket. */
+export interface StoreAsk {
+  aid: string;
+  itemId: string;
+  listId: string;
+  text: string;
+  guess: string | null;
+  options: string[];
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { CAT_LABEL, kbKey } from '../../lib/domain';
+import { CAT_LABEL, isSuper, kbKey } from '../../lib/domain';
 import { forget } from '../../data/actions';
 import { useStore } from '../../store/useStore';
 import { Sheet, closeSheet } from './Sheets';
@@ -34,7 +34,7 @@ export default function KbSheet() {
             const where = ls.length ? ls.map(([id, n]) => `${name(id)}${ls.length > 1 ? ` (${n})` : ''}`).join(' · ') : 'geen lijst';
             return (
               <div className="kbrow" key={e.key}>
-                <span className="txt"><span className="t">{e.text}</span><span className="sub">{where}{e.cat ? ' · ' + CAT_LABEL[e.cat] : ''}</span></span>
+                <span className="txt"><span className="t">{e.text}</span><span className="sub">{where}{e.cat ? ' · ' + CAT_LABEL[e.cat] : ''}{e.store && !isSuper(e.store) ? ' · ' + e.store : ''}</span></span>
                 <button type="button" className="linkbtn" onClick={() => forget(e.key)}>Vergeet</button>
               </div>
             );

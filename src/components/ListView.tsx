@@ -1,10 +1,11 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Check, Pencil, Plus, ShoppingCart, Sparkles } from 'lucide-react';
-import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo } from '../lib/domain';
+import { Check, Pencil, Plus, ShoppingCart, Sparkles, Store } from 'lucide-react';
+import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, normStore } from '../lib/domain';
 import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
 import type { CatId, Item, List, PlanQuestions } from '../types';
 import { Avatar, Doodle, useNames } from './bits';
+import StoreAsks from './StoreAsks';
 
 const SHOPPING_FOR = 3 * 3600e3;
 
@@ -56,6 +57,8 @@ export default function ListView({ list: l }: { list: List }) {
         )}
       </div>
 
+      {l.kind === 'shop' && !readOnly && <StoreAsks listId={l.id} />}
+
       {ghosts.length > 0 && (
         <div className="items ghosts">
           {ghosts.map(g => (
@@ -76,7 +79,7 @@ export default function ListView({ list: l }: { list: List }) {
         </div>
       ) : l.kind === 'shop' ? (
         <>
-          {groupByAisle(open).map(([c, g]) => (
+          {groupByAisle(open.filter(i => isSuper(i.store))).map(([c, g]) => (
             <section className="group" key={c}>
               <h2>
                 <span className="aisle"><i style={AISLE_COLOR[c] ? { background: `var(--c-${AISLE_COLOR[c]}-fg)` } : undefined} />{CAT_LABEL[c] || 'Overig'}</span>
@@ -84,6 +87,15 @@ export default function ListView({ list: l }: { list: List }) {
                   {c === 'overig' && aiOn && !readOnly && <><button className="grp-ai" onClick={() => sortOverig(l.id)}><Sparkles size={13} /> Sorteer</button> · </>}
                   {g.length}
                 </span>
+              </h2>
+              <div className="items">{g.sort((a, b) => urgentFirst(a, b) || a.createdAt - b.createdAt).map(i => <ItemRow key={i.id} item={i} kind="shop" />)}</div>
+            </section>
+          ))}
+          {groupByStore(open.filter(i => !isSuper(i.store))).map(([store, g]) => (
+            <section className="group" key={'w-' + store}>
+              <h2>
+                <span className="aisle"><Store size={15} style={{ color: 'var(--c-druif-fg)' }} />Bij de {store.toLowerCase()}</span>
+                <span>{g.length}</span>
               </h2>
               <div className="items">{g.sort((a, b) => urgentFirst(a, b) || a.createdAt - b.createdAt).map(i => <ItemRow key={i.id} item={i} kind="shop" />)}</div>
             </section>
@@ -121,6 +133,13 @@ export default function ListView({ list: l }: { list: List }) {
       )}
     </>
   );
+}
+
+/** Items that are not bought at the supermarket, per shop (Bouwmarkt, Drogist…), after the aisles. */
+function groupByStore(items: Item[]): [string, Item[]][] {
+  const groups = new Map<string, Item[]>();
+  items.forEach(i => { const s = normStore(i.store) || 'Overig'; groups.set(s, [...(groups.get(s) || []), i]); });
+  return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'nl'));
 }
 
 function groupByAisle(items: Item[]): [CatId, Item[]][] {

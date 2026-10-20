@@ -12,7 +12,8 @@ export function analyzePrompt(b: any) {
   return `Je analyseert nieuwe items voor de gedeelde lijsten van een Nederlands huishouden. Vandaag is het ${s(b.today, 60)}.
 Lijsten:
 ${lists.map((l: any) => `- id "${s(l.id, 60)}": "${s(l.name, 60)}" (${l.kind === 'shop' ? 'boodschappenlijst' : 'takenlijst'}). Staat er doorgaans op: ${list(l.examples, 18)}`).join('\n')}
-${fixed ? `Alles komt op de lijst "${s(fixed.name, 60)}" (id "${s(fixed.id, 60)}"); kies dus die lijst.\n` : ''}Wat dit huishouden eerder koos (volg dit): ${list(b.learned, 40)}.
+${fixed ? `Alles komt op de lijst "${s(fixed.name, 60)}" (id "${s(fixed.id, 60)}"); kies dus die lijst.\n` : ''}Wat dit huishouden eerder koos (volg dit, ook de winkel tussen [ ]): ${list(b.learned, 40)}.
+Winkels waar dit huishouden naast de supermarkt boodschappen doet: ${list(b.stores, 12)}.
 
 Ingetypte items (nummer: tekst):
 ${items.map((t: unknown, n: number) => `${n}: ${s(t, 200)}`).join('\n')}
@@ -20,9 +21,11 @@ ${items.map((t: unknown, n: number) => `${n}: ${s(t, 200)}`).join('\n')}
 Analyseer elk item:
 - "text": nette Nederlandse naam met hoofdletter, spelfouten verbeterd, zonder aantal of datum. Bij taken kort en duidelijk wat er moet gebeuren.
 - "qty": de hoeveelheid als die genoemd is (bijv. "2 pak", "500 g"), anders een lege string.
-- "note": merk, winkel of ander detail dat genoemd werd, anders een lege string.
+- "note": merk of ander detail dat genoemd werd, anders een lege string.
 - "cat": bij boodschappen de afdeling-id (${CAT_PROMPT}); bij taken een lege string.
 - "due": datum JJJJ-MM-DD als er een moment genoemd is, anders een lege string.
+- "store": bij boodschappen waar je dit in Nederland normaal koopt: "Supermarkt" als een gewone supermarkt (Albert Heijn, Jumbo) het verkoopt, anders het soort winkel, zoals "Drogist", "Bouwmarkt", "Tuincentrum", "Dierenwinkel", "Apotheek", "Slager", "Bakker", "Markt" of "Online". Noemt de gebruiker zelf een winkel, gebruik die. Bij taken een lege string.
+- "storeConfidence": tussen 0 en 1 hoe zeker die winkel is. Hoog (0.9) voor gewone boodschappen als melk of brood. Laag (0.6 of minder) als het zowel in de supermarkt als elders te koop is of als je twijfelt, bijvoorbeeld stro, hooi, batterijen, een lamp, potgrond of vogelzaad.
 - "list": id van de lijst waar het hoort; "confidence" tussen 0 en 1, hoog alleen als het duidelijk is.
 Noemt één regel meerdere dingen ("melk en eieren"), geef dan per ding een object met hetzelfde "i". Verzin niets wat niet genoemd is.`;
 }
@@ -133,7 +136,7 @@ export const ANALYZE_SCHEMA = {
   type: 'ARRAY',
   items: {
     type: 'OBJECT',
-    properties: { i: { type: 'INTEGER' }, text: STR, qty: STR, note: STR, cat: STR, due: STR, list: STR, confidence: { type: 'NUMBER' } },
+    properties: { i: { type: 'INTEGER' }, text: STR, qty: STR, note: STR, cat: STR, due: STR, store: STR, storeConfidence: { type: 'NUMBER' }, list: STR, confidence: { type: 'NUMBER' } },
     required: ['i', 'text', 'list', 'confidence'],
   },
 };

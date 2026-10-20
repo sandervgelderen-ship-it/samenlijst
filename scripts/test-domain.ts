@@ -1,6 +1,6 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
-import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, learnEntry, kbKey } from '../src/lib/domain';
+import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, learnEntry, kbKey, normStore, isSuper, decideStore, storeOptions } from '../src/lib/domain';
 import { cleanAnalysis, cleanQuestions } from '../src/lib/aiClean';
 import type { Item, KbEntry, List } from '../src/types';
 
@@ -63,6 +63,20 @@ const qs = cleanQuestions({ questions: [
 ] });
 t('vragen: dubbele opties weg, max 3', () => assert.deepEqual(qs.map(q => q.options.length), [3, 2, 2]));
 t('vragen: meerdere mogelijk', () => assert.deepEqual(qs.map(q => q.multi), [false, true, false]));
+
+// Waar koop je het?
+t('winkel: ketens worden soorten winkels', () => assert.deepEqual(['AH', 'jumbo', 'Gamma', 'kruidvat', 'De Intratuin', 'bol.com', 'Action', ''].map(normStore), ['Supermarkt', 'Supermarkt', 'Bouwmarkt', 'Drogist', 'Tuincentrum', 'Online', 'Action', null]));
+t('winkel: supermarkt of niets is supermarkt', () => assert.deepEqual([isSuper(null), isSuper('albert heijn'), isSuper('Dierenwinkel')], [true, true, false]));
+t('winkel: geleerd gaat voor AI', () => assert.deepEqual(decideStore('Dierenwinkel', { store: 'Supermarkt', conf: 0.95 }), { store: 'Dierenwinkel', ask: false, guess: null }));
+t('winkel: zekere AI zonder vraag', () => assert.deepEqual(decideStore(null, { store: 'Supermarkt', conf: 0.95 }), { store: 'Supermarkt', ask: false, guess: null }));
+t('winkel: twijfel geeft een vraag met gok', () => assert.deepEqual(decideStore(undefined, { store: 'dierenwinkel', conf: 0.5 }), { store: null, ask: true, guess: 'Dierenwinkel' }));
+t('winkel: zonder AI geen vraag', () => assert.deepEqual(decideStore(null, null), { store: null, ask: false, guess: null }));
+t('winkel: opties gok, supermarkt, eigen winkels', () => assert.deepEqual(storeOptions('Dierenwinkel', ['Action', 'Action', 'Gamma', null], 5), ['Dierenwinkel', 'Supermarkt', 'Action', 'Bouwmarkt', 'Drogist']));
+const kbStore = learnEntry(undefined, 'Stro', null, { store: 'pets place', by: 'u1', listIds: new Set() })!;
+t('winkel: kennisbank onthoudt de winkel', () => assert.equal(kbStore.store, 'Dierenwinkel'));
+t('winkel: later leren zonder winkel houdt hem', () => assert.equal(learnEntry(kbStore, 'Stro', 'bood', { by: 'u1', listIds: new Set(['bood']) })!.store, 'Dierenwinkel'));
+const anStore = cleanAnalysis([{ i: 0, text: 'Stro', store: 'Dierenwinkel', storeConfidence: 0.55, list: 'bood', confidence: 0.9 }], 1);
+t('analyse: winkel en zekerheid', () => assert.deepEqual([anStore[0][0].store, anStore[0][0].storeConf], ['Dierenwinkel', 0.55]));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');

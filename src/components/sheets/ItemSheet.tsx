@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { CATS } from '../../lib/domain';
-import { deleteItems, learn, moveItem, queuePlan, updateItem } from '../../data/actions';
+import { CATS, normStore, STORES, SUPERMARKT } from '../../lib/domain';
+import { deleteItems, learn, moveItem, queuePlan, setStore, updateItem, usedStores } from '../../data/actions';
 import { setS, useStore } from '../../store/useStore';
 import type { CatId, Item } from '../../types';
 import { Avatar, useHousehold, useNames } from '../bits';
@@ -13,7 +13,7 @@ export default function ItemSheet({ id }: { id: string }) {
   const aiOn = useStore(s => s.aiOn);
   const household = useHousehold();
   const { full } = useNames();
-  const [f, setF] = useState(() => item ? { text: item.text, qty: item.qty || '', note: item.note || '', cat: (item.cat || 'overig') as CatId, due: item.due || '', urgent: !!item.urgent, assignee: item.assignee || null, listId: item.listId } : null);
+  const [f, setF] = useState(() => item ? { text: item.text, qty: item.qty || '', note: item.note || '', cat: (item.cat || 'overig') as CatId, due: item.due || '', store: normStore(item.store) || SUPERMARKT, urgent: !!item.urgent, assignee: item.assignee || null, listId: item.listId } : null);
 
   // Someone else deleted it while it was open.
   useEffect(() => { if (!item) { closeSheet(); } }, [item]);
@@ -27,6 +27,7 @@ export default function ItemSheet({ id }: { id: string }) {
     if (shop) patch.cat = f!.cat; else { patch.due = f!.due || null; patch.assignee = f!.assignee; }
     updateItem(id, patch);
     if (shop && f!.cat !== (item!.cat || 'overig')) learn(patch.text!, null, { cat: f!.cat });
+    if (shop && (normStore(f!.store) || SUPERMARKT) !== (normStore(item!.store) || SUPERMARKT)) setStore(id, f!.store);
     if (f!.listId !== item!.listId) moveItem(id, f!.listId);
     closeSheet();
   }
@@ -48,6 +49,12 @@ export default function ItemSheet({ id }: { id: string }) {
           ? <label>Afdeling<select className="field" id="e-cat" value={f.cat} onChange={e => set({ cat: e.target.value as CatId })}>{CATS.map(([c, label]) => <option key={c} value={c}>{label}</option>)}</select></label>
           : <label>Wanneer<input className="field" type="date" id="e-due" value={f.due} onChange={e => set({ due: e.target.value })} /></label>}
       </div>
+      {shop && (
+        <label>Waar koop je het
+          <input className="field" id="e-store" list="e-stores" value={f.store} maxLength={30} onChange={e => set({ store: e.target.value })} onFocus={e => e.target.select()} />
+          <datalist id="e-stores">{[...new Set([...STORES, ...usedStores().map(s => normStore(s) || '')])].filter(Boolean).map(s => <option key={s} value={s} />)}</datalist>
+        </label>
+      )}
       <label>Notitie<input className="field" id="e-note" value={f.note} maxLength={140} placeholder={shop ? 'Merk, bonus, alternatief…' : 'Details'} onChange={e => set({ note: e.target.value })} /></label>
       {!shop && household && (
         <div style={{ display: 'grid', gap: 6 }}>

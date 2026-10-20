@@ -208,7 +208,7 @@ export function route(p: Entry, lists: List[], items: Item[], kb: Map<string, Kb
 /** New knowledge-base entry after a signal. weight 1 = gewoon toegevoegd, 2 = bewuste keuze; from = de lijst waar het ten onrechte stond. */
 export function learnEntry(
   old: KbEntry | undefined, text: string, listId: string | null,
-  opts: { weight?: number; from?: string | null; cat?: string | null; by: string | null; listIds: Set<string> },
+  opts: { weight?: number; from?: string | null; cat?: string | null; store?: string | null; by: string | null; listIds: Set<string> },
 ): Omit<KbEntry, 'id'> & { id: string } | null {
   const key = kbKey(text);
   if (!key || key.length > 120) return null;
@@ -221,7 +221,59 @@ export function learnEntry(
   }
   for (const id of Object.keys(lists)) if (!opts.listIds.has(id)) delete lists[id];
   const cat = isCat(opts.cat) ? opts.cat : (old?.cat ?? null);
-  return { id: old?.id || kbId(key), key, text: cap(String(text).trim()).slice(0, 120), lists, cat, at: Date.now(), by: opts.by };
+  const store = normStore(opts.store) ?? old?.store ?? null;
+  return { id: old?.id || kbId(key), key, text: cap(String(text).trim()).slice(0, 120), lists, cat, store, at: Date.now(), by: opts.by };
+}
+
+/* ---------- Where to buy it ---------- */
+export const SUPERMARKT = 'Supermarkt';
+export const STORES = [SUPERMARKT, 'Drogist', 'Bouwmarkt', 'Tuincentrum', 'Dierenwinkel', 'Apotheek', 'Slager', 'Bakker', 'Markt', 'Online'];
+const STORE_ALIASES: [RegExp, string][] = [
+  [/^(supermarkt|super|ah|albert heijn|jumbo|lidl|aldi|plus|dirk|coop|spar|vomar|dekamarkt|hoogvliet|picnic|crisp)$/, SUPERMARKT],
+  [/^(drogist(erij)?|kruidvat|etos|trekpleister|da)$/, 'Drogist'],
+  [/^(bouwmarkt|gamma|praxis|karwei|hornbach|hubo|bauhaus|doe-het-zelf(zaak)?|ijzerwaren(winkel)?)$/, 'Bouwmarkt'],
+  [/^(tuincentrum|intratuin|groenrijk|tuinwinkel)$/, 'Tuincentrum'],
+  [/^(dierenwinkel|dierenspeciaalzaak|dierenzaak|pets place|jumper|dierenspeciaal)$/, 'Dierenwinkel'],
+  [/^(apotheek)$/, 'Apotheek'],
+  [/^(slager|slagerij)$/, 'Slager'],
+  [/^(bakker|bakkerij)$/, 'Bakker'],
+  [/^(markt|weekmarkt)$/, 'Markt'],
+  [/^(online|internet|bol|bol\.com|webshop|amazon)$/, 'Online'],
+];
+/** One name per kind of shop: "AH" and "jumbo" are the supermarket, "Gamma" the bouwmarkt; others keep their name. */
+export function normStore(s: unknown): string | null {
+  const t = String(s ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
+  if (!t) return null;
+  const k = norm(t).replace(/^(de|het|een)\s+/, '');
+  for (const [re, name] of STORE_ALIASES) if (re.test(k)) return name;
+  return cap(t);
+}
+export const isSuper = (store: string | null | undefined) => !store || normStore(store) === SUPERMARKT;
+
+/**
+ * Where an item is bought. What the household told us wins; then a confident AI; when the AI doubts
+ * (or thinks it is not the supermarket, without being sure) we ask. Without any signal: supermarket, no question.
+ */
+export function decideStore(known: string | null | undefined, ai: { store?: string | null; conf?: number } | null, minConf = 0.8):
+  { store: string | null; ask: boolean; guess: string | null } {
+  const k = normStore(known);
+  if (k) return { store: k, ask: false, guess: null };
+  const g = normStore(ai?.store);
+  if (!ai || !g) return { store: null, ask: false, guess: null };
+  if ((ai.conf ?? 0) >= minConf) return { store: g, ask: false, guess: null };
+  return { store: null, ask: true, guess: g };
+}
+
+/** Answer chips for "Waar koop je dit?": the guess first, then the supermarket, then shops this household uses. */
+export function storeOptions(guess: string | null, used: (string | null | undefined)[], max = 5): string[] {
+  const out: string[] = [];
+  const add = (s: string | null | undefined) => { const n = normStore(s); if (n && !out.includes(n) && out.length < max) out.push(n); };
+  add(guess); add(SUPERMARKT);
+  const counts = new Map<string, number>();
+  used.forEach(u => { const n = normStore(u); if (n) counts.set(n, (counts.get(n) || 0) + 1); });
+  [...counts.entries()].sort((a, b) => b[1] - a[1]).forEach(([n]) => add(n));
+  STORES.forEach(add);
+  return out;
 }
 
 /* ---------- Look ---------- */
