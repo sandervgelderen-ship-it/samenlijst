@@ -11,6 +11,7 @@ import HomeView from './HomeView';
 import ListView from './ListView';
 import AddBar from './AddBar';
 import Sheets from './sheets/Sheets';
+import { recordScreen } from '../lib/diagnostics';
 
 /** Shown when Firebase refuses to save, with what to do about it. */
 function AccessBanner() {
@@ -41,6 +42,10 @@ export default function Shell() {
   const household = useHousehold();
   const inList = !!list;
   const showBar = !readOnly && listsLoaded && (inList || view === 'home');
+  const sheetKind = useStore(s => s.sheet?.kind);
+  useEffect(() => {
+    recordScreen(`${inList ? `lijst (${list!.kind === 'shop' ? 'boodschappen' : 'taken'})` : view}${sheetKind ? ` + ${sheetKind}` : ''}`);
+  }, [inList, view, sheetKind, list?.kind]);
 
   // A list someone else deleted: go back home.
   useEffect(() => { if (view !== 'home' && listsLoaded && !list) setS({ view: 'home' }); }, [view, listsLoaded, list]);

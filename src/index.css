@@ -453,3 +453,26 @@ img { max-width: 100%; }
 .install-txt span { font-size: .88rem; color: color-mix(in srgb, var(--ink) 70%, var(--c-lucht-bg)); }
 .install .btn { margin-left: auto; }
 .install-x { position: absolute; top: 8px; right: 8px; border: 0; background: none; color: var(--muted); width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; }
+
+/* Iets melden */
+.fbtab {
+  position: fixed; right: 0; top: 42%; z-index: 15; width: 30px; height: 48px; border: 0; border-radius: 14px 0 0 14px;
+  background: color-mix(in srgb, var(--ink) 72%, transparent); color: var(--surface); display: grid; place-items: center;
+  box-shadow: var(--shadow); backdrop-filter: blur(6px); transition: width .2s, background .2s; padding: 0;
+}
+.fbtab:hover { width: 38px; background: var(--ink); }
+.fbtab:disabled { opacity: .7; }
+.fbtab .dots { transform: scale(.8); }
+.fbwrap, .backdrop.fbbig { z-index: 35; }
+.fbshot { display: flex; gap: 12px; align-items: flex-start; }
+.fbshot img { height: 150px; width: auto; max-width: 45%; object-fit: contain; border-radius: 14px; border: 2px solid var(--line); flex: none; transition: opacity .2s; }
+.sheet label.fbcheck, label.fbcheck { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); font-weight: 600; font-size: .95rem; cursor: pointer; }
+.fbcheck input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--accent); flex: none; }
+.fbcheck .note { display: block; font-weight: 400; margin-top: 4px; }
+.fberr { margin: 0; color: var(--danger); font-weight: 700; font-size: .92rem; }
+.fbitem { display: grid; gap: 8px; padding: 14px 0; border-top: 1px solid var(--line); }
+.fbmeta { display: grid; gap: 2px; }
+.fbtext { margin: 0; white-space: pre-wrap; }
+.fbthumb { max-height: 180px; width: auto; max-width: 100%; justify-self: start; border-radius: 12px; border: 2px solid var(--line); cursor: zoom-in; }
+.backdrop.fbbig { align-items: center; padding: 16px; cursor: zoom-out; }
+.backdrop.fbbig img { max-width: 100%; max-height: 100%; border-radius: 14px; box-shadow: var(--shadow-lift); }

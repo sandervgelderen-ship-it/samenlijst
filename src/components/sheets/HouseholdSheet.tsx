@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Copy, Users } from 'lucide-react';
+import { Copy, MessageSquareWarning, Users } from 'lucide-react';
 import { logOut } from '../../auth';
 import { setApiUrl } from '../../api';
 import { createHousehold, joinHousehold, leaveHousehold, renameHousehold, renewInviteCode, selectHousehold } from '../../data/repo';
 import { toast } from '../../data/toast';
-import { useStore } from '../../store/useStore';
+import { setS, useStore } from '../../store/useStore';
 import { Avatar, useHousehold, useNames } from '../bits';
 import { useInstall } from '../InstallPrompt';
+import { canSeeReports } from '../Feedback';
 import { Sheet, closeSheet } from './Sheets';
 
 export default function HouseholdSheet() {
@@ -103,6 +104,13 @@ export default function HouseholdSheet() {
           {inst.canPrompt
             ? <button type="button" className="chip" style={{ width: 'fit-content' }} onClick={() => inst.install()}>Installeer Samenlijst op dit apparaat</button>
             : <p className="note">Op iPhone: tik in Safari op Deel en kies Zet op beginscherm.</p>}
+        </div>
+      )}
+
+      {canSeeReports() && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <span className="lbl2">Beheer</span>
+          <button type="button" className="chip" style={{ width: 'fit-content' }} onClick={() => setS({ sheet: { kind: 'reports' } })}><MessageSquareWarning size={14} /> Meldingen bekijken</button>
         </div>
       )}
 

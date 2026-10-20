@@ -3,6 +3,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Login from './components/Login';
 import HouseholdSetup from './components/HouseholdSetup';
 import Shell from './components/Shell';
+import { FeedbackTab } from './components/Feedback';
+import { recordScreen } from './lib/diagnostics';
 import { checkAi } from './api';
 import { startAuth, syncMemberInfo } from './data/repo';
 import { useStore } from './store/useStore';
@@ -31,5 +33,8 @@ export default function App() {
   else if (!hid || !households.some(h => h.id === hid)) body = <HouseholdSetup />;
   else body = <Shell />;
 
-  return <ErrorBoundary>{body}</ErrorBoundary>;
+  const screen = !authReady ? 'laden' : !user ? 'inloggen' : !hid ? 'huishouden-kiezen' : null;
+  useEffect(() => { if (screen) recordScreen(screen); }, [screen]);
+
+  return <ErrorBoundary>{body}<FeedbackTab /></ErrorBoundary>;
 }

@@ -36,6 +36,7 @@ jobs:
           VITE_BASE: /samenlijst/
           # Geen eigen server: de AI loopt via Firebase AI Logic in hetzelfde Firebase-project.
           VITE_AI_MODE: firebase
+          VITE_APP_VERSION: ${{ github.sha }}
 
       # Pages staat aan (Settings › Pages › Source: GitHub Actions).
       - uses: actions/configure-pages@v5

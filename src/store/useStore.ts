@@ -13,7 +13,8 @@ export type Sheet =
   | { kind: 'list'; id: string }
   | { kind: 'smart'; mode: 'add' | 'forgot'; listId: string }
   | { kind: 'kb' }
-  | { kind: 'household' };
+  | { kind: 'household' }
+  | { kind: 'reports' };
 
 export interface QaSel {
   /** Per question index, the chosen option indexes. */

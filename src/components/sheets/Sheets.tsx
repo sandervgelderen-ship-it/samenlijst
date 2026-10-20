@@ -5,6 +5,7 @@ import ListSheet from './ListSheet';
 import SmartSheet from './SmartSheet';
 import KbSheet from './KbSheet';
 import HouseholdSheet from './HouseholdSheet';
+import { ReportsSheet } from '../Feedback';
 
 export const closeSheet = () => setS({ sheet: null });
 
@@ -33,5 +34,6 @@ export default function Sheets() {
     case 'smart': return <SmartSheet key={sheet.mode + sheet.listId} mode={sheet.mode} listId={sheet.listId} />;
     case 'kb': return <KbSheet />;
     case 'household': return <HouseholdSheet />;
+    case 'reports': return <ReportsSheet onClose={closeSheet} />;
   }
 }

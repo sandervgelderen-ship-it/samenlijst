@@ -142,5 +142,24 @@ service cloud.firestore {
       allow create: if isSignedIn() && incoming().code == code && slIsMemberAfter(incoming().hid);
       allow delete: if isSignedIn() && slIsMember(existing().hid);
     }
+
+    // Meldingen ("Iets melden"): iedereen met een account mag er een sturen; alleen de beheerder leest ze
+    // en zet ze op afgehandeld.
+    match /samenlijstFeedback/{feedbackId} {
+      allow create: if request.auth != null
+        && request.resource.data.id == feedbackId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'nieuw'
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 4000
+        && (!('screenshot' in request.resource.data) || (request.resource.data.screenshot is string && request.resource.data.screenshot.size() <= 700000));
+      allow read: if request.auth != null
+        && request.auth.token.email == 'sandervgelderen@gmail.com'
+        && request.auth.token.email_verified == true;
+      allow update: if request.auth != null
+        && request.auth.token.email == 'sandervgelderen@gmail.com'
+        && request.auth.token.email_verified == true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledAt']);
+    }
 }
 }
