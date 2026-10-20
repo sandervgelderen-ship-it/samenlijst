@@ -2,7 +2,7 @@
  * - Pages: network first, fall back to the cached app shell when offline.
  * - Built files (hashed names), fonts and icons: cache first, then refresh in the background.
  * - Firebase / Google APIs are never cached here; Firestore has its own offline cache. */
-const CACHE = 'samenlijst-v1';
+const CACHE = 'samenlijst-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -37,6 +37,7 @@ self.addEventListener('fetch', (e) => {
   }
 
   if (!isStatic(url)) return; // Firebase, Gemini and everything else: straight to the network.
+  if (url.searchParams.has('check')) return; // The app asking whether a newer version is online.
 
   e.respondWith(
     caches.open(CACHE).then(async (c) => {

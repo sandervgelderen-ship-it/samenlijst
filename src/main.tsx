@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { installDiagnostics } from './lib/diagnostics';
+import { watchForUpdates } from './lib/updates';
 
 installDiagnostics();
+watchForUpdates();
 
 // Installable web app: the service worker opens the app instantly, also offline.
 // Not in the Android app (Capacitor serves the files itself) and not during development.

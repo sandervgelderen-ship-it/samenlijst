@@ -5,6 +5,8 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { S, setS } from './store/useStore';
+// Loaded with the app (not on demand): a piece loaded later can be gone after a new version is published.
+import { runLocal } from './ai/firebaseAi';
 
 /** Web version without a server: AI goes through Firebase AI Logic instead of /api. */
 export const AI_VIA_FIREBASE = import.meta.env.VITE_AI_MODE === 'firebase';
@@ -23,7 +25,6 @@ export function apiBase(): string {
 export async function post<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
   if (AI_VIA_FIREBASE && !S().apiUrl.trim()) {
     try {
-      const { runLocal } = await import('./ai/firebaseAi');
       const out = await runLocal(path, body);
       if (signal?.aborted) throw new DOMException('Gestopt', 'AbortError');
       return out as T;
