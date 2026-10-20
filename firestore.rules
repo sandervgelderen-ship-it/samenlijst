@@ -156,10 +156,15 @@ service cloud.firestore {
       allow read: if request.auth != null
         && request.auth.token.email == 'sandervgelderen@gmail.com'
         && request.auth.token.email_verified == true;
+      // De beheerder zet ze op nieuw, bij-claude (met een opmerking voor Claude) of afgehandeld. Claude zelf werkt
+      // via de deploysleutel (GitHub Actions) en zet daar zijn notitie bij (claudeNote).
       allow update: if request.auth != null
         && request.auth.token.email == 'sandervgelderen@gmail.com'
         && request.auth.token.email_verified == true
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledAt', 'adminNote', 'sentToClaudeAt'])
+        && request.resource.data.status in ['nieuw', 'bij-claude', 'afgehandeld']
+        && (!('adminNote' in request.resource.data) || request.resource.data.adminNote == null
+            || (request.resource.data.adminNote is string && request.resource.data.adminNote.size() <= 2000));
     }
 }
 }

@@ -4,12 +4,8 @@
  * Device, version, screen and recent errors go along automatically.
  */
 import { useEffect, useState } from 'react';
-import { Check, Copy, MessageSquareWarning, X } from 'lucide-react';
-import {
-  captureContext, captureScreen, feedbackAsText, FEEDBACK_TEXT_MAX, isAdmin, loadFeedback, NO_CAPTURE, sendFeedback,
-  setFeedbackStatus, type Feedback, type FeedbackContext,
-} from '../data/feedback';
-import { toast } from '../data/toast';
+import { MessageSquareWarning } from 'lucide-react';
+import { captureContext, captureScreen, FEEDBACK_TEXT_MAX, NO_CAPTURE, sendFeedback, type FeedbackContext } from '../data/feedback';
 import { useStore } from '../store/useStore';
 
 const noCapture = { [NO_CAPTURE]: '' };
@@ -106,57 +102,3 @@ function FeedbackSheet({ screenshot, context, onClose }: { screenshot: string | 
     </div>
   );
 }
-
-/** For the admin: all reports, newest first, with a copy button to paste into a chat with Claude. */
-export function ReportsSheet({ onClose }: { onClose: () => void }) {
-  const [items, setItems] = useState<Feedback[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [showDone, setShowDone] = useState(false);
-  const [big, setBig] = useState<string | null>(null);
-  useEffect(() => {
-    loadFeedback().then(setItems).catch(e => { console.warn(e); setError((e as { code?: string }).code === 'permission-denied' ? 'Geen toegang. Alleen de beheerder kan meldingen lezen, en de regels moeten het meldingen-deel hebben.' : 'Laden lukte niet.'); });
-  }, []);
-  const shown = (items || []).filter(f => showDone || f.status !== 'afgehandeld');
-  const copy = async (f: Feedback) => {
-    try { await navigator.clipboard.writeText(feedbackAsText(f)); toast('Gekopieerd. Plak het in een gesprek met Claude.'); }
-    catch { toast('Kopiëren lukte niet.'); }
-  };
-  const mark = async (f: Feedback) => {
-    const status = f.status === 'afgehandeld' ? 'nieuw' : 'afgehandeld';
-    try { await setFeedbackStatus(f.id, status); setItems(xs => (xs || []).map(x => x.id === f.id ? { ...x, status } : x)); }
-    catch { toast('Opslaan lukte niet.'); }
-  };
-  return (
-    <div className="backdrop" {...noCapture} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label="Meldingen">
-        <div className="grab" />
-        <div className="actions">
-          <h3><span className="spk"><MessageSquareWarning /></span>Meldingen</h3>
-          <button type="button" className="iconbtn" onClick={onClose} aria-label="Sluiten"><X size={18} /></button>
-        </div>
-        <label className="fbcheck"><input type="checkbox" checked={showDone} onChange={e => setShowDone(e.target.checked)} /><span>Ook afgehandelde tonen</span></label>
-        {error && <p className="fberr">{error}</p>}
-        {!items && !error && <p className="note">Laden…</p>}
-        {items && !shown.length && <p className="note">Geen {showDone ? '' : 'open '}meldingen.</p>}
-        {shown.map(f => (
-          <div className="fbitem" key={f.id}>
-            <div className="fbmeta">
-              <b>{f.name || f.email || 'Onbekend'}</b>
-              <span className="note">{new Date(f.createdAt).toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' })} · {String(f.context?.screen ?? '')}{f.context?.list ? ` · ${String(f.context.list)}` : ''}</span>
-            </div>
-            <p className="fbtext">{f.text || <em className="note">(niets ingevuld)</em>}</p>
-            {f.screenshot && <img className="fbthumb" src={f.screenshot} alt="Schermafbeelding bij de melding" onClick={() => setBig(f.screenshot!)} />}
-            {f.logs?.length > 0 && <p className="note">{f.logs.length} recente {f.logs.length === 1 ? 'fout of waarschuwing' : 'fouten of waarschuwingen'}</p>}
-            <div className="pacts">
-              <button type="button" className="chip" onClick={() => void copy(f)}><Copy size={14} /> Kopieer voor Claude</button>
-              <button type="button" className="chip" aria-pressed={f.status === 'afgehandeld'} onClick={() => void mark(f)}><Check size={14} /> {f.status === 'afgehandeld' ? 'Afgehandeld' : 'Markeer afgehandeld'}</button>
-            </div>
-          </div>
-        ))}
-        {big && <div className="backdrop fbbig" onClick={() => setBig(null)}><img src={big} alt="Schermafbeelding groot" /></div>}
-      </div>
-    </div>
-  );
-}
-
-export const canSeeReports = () => isAdmin();

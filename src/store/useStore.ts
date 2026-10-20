@@ -13,8 +13,7 @@ export type Sheet =
   | { kind: 'list'; id: string }
   | { kind: 'smart'; mode: 'add' | 'forgot'; listId: string }
   | { kind: 'kb' }
-  | { kind: 'household' }
-  | { kind: 'reports' };
+  | { kind: 'household' };
 
 export interface QaSel {
   /** Per question index, the chosen option indexes. */
@@ -51,7 +50,7 @@ interface State {
   apiUrl: string;
 
   // UI
-  view: string; // 'home' or a list id
+  view: string; // 'home', 'beheer' or a list id
   sheet: Sheet | null;
   toast: Toast | null;
   pending: Pending[];

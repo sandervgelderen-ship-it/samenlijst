@@ -9,6 +9,7 @@ import { logOut } from '../auth';
 import { selectHousehold } from '../data/repo';
 import HomeView from './HomeView';
 import ListView from './ListView';
+import AdminView from './AdminView';
 import AddBar from './AddBar';
 import Sheets from './sheets/Sheets';
 import { recordScreen } from '../lib/diagnostics';
@@ -41,6 +42,8 @@ export default function Shell() {
   const readOnly = useStore(s => s.readOnly);
   const household = useHousehold();
   const inList = !!list;
+  const inAdmin = view === 'beheer';
+  const inSub = inList || inAdmin;
   const showBar = !readOnly && listsLoaded && (inList || view === 'home');
   const sheetKind = useStore(s => s.sheet?.kind);
   useEffect(() => {
@@ -48,7 +51,7 @@ export default function Shell() {
   }, [inList, view, sheetKind, list?.kind]);
 
   // A list someone else deleted: go back home.
-  useEffect(() => { if (view !== 'home' && listsLoaded && !list) setS({ view: 'home' }); }, [view, listsLoaded, list]);
+  useEffect(() => { if (view !== 'home' && view !== 'beheer' && listsLoaded && !list) setS({ view: 'home' }); }, [view, listsLoaded, list]);
 
   // Android back button and browser back: close a sheet first, then leave the list.
   useEffect(() => {
@@ -71,11 +74,11 @@ export default function Shell() {
     <>
       <header className="top">
         <div className="wrap">
-          {inList
+          {inSub
             ? <button className="iconbtn" onClick={() => go('home')} aria-label="Terug naar alle lijsten"><ChevronLeft size={22} strokeWidth={2.4} /></button>
             : <Logo />}
-          <h1>{inList ? list!.name : household?.name || 'Samenlijst'}</h1>
-          {inList
+          <h1>{inList ? list!.name : inAdmin ? 'Beheer' : household?.name || 'Samenlijst'}</h1>
+          {inAdmin ? <span style={{ width: 44 }} /> : inList
             ? !readOnly && <button className="iconbtn" onClick={() => setS({ sheet: { kind: 'list', id: list!.id } })} aria-label="Lijstinstellingen"><MoreHorizontal size={20} /></button>
             : <button className="iconbtn" onClick={() => setS({ sheet: { kind: 'household' } })} aria-label="Huishouden en instellingen"><Users size={19} /></button>}
         </div>
@@ -85,7 +88,7 @@ export default function Shell() {
           <AccessBanner />
           {!listsLoaded
             ? <div className="state"><strong>Lijsten laden…</strong>Even geduld.</div>
-            : inList ? <ListView list={list!} /> : <HomeView />}
+            : inList ? <ListView list={list!} /> : inAdmin ? <AdminView /> : <HomeView />}
         </div>
       </main>
       {showBar && <AddBar list={list} />}

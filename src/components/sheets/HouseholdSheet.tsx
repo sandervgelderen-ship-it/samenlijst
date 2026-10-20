@@ -5,10 +5,11 @@ import { logOut } from '../../auth';
 import { setApiUrl } from '../../api';
 import { createHousehold, joinHousehold, leaveHousehold, renameHousehold, renewInviteCode, selectHousehold } from '../../data/repo';
 import { toast } from '../../data/toast';
-import { setS, useStore } from '../../store/useStore';
+import { useStore } from '../../store/useStore';
 import { Avatar, useHousehold, useNames } from '../bits';
 import { useInstall } from '../InstallPrompt';
-import { canSeeReports } from '../Feedback';
+import { isAdmin } from '../../data/feedback';
+import { go } from '../../data/actions';
 import { Sheet, closeSheet } from './Sheets';
 
 export default function HouseholdSheet() {
@@ -107,10 +108,10 @@ export default function HouseholdSheet() {
         </div>
       )}
 
-      {canSeeReports() && (
+      {isAdmin() && (
         <div style={{ display: 'grid', gap: 8 }}>
           <span className="lbl2">Beheer</span>
-          <button type="button" className="chip" style={{ width: 'fit-content' }} onClick={() => setS({ sheet: { kind: 'reports' } })}><MessageSquareWarning size={14} /> Meldingen bekijken</button>
+          <button type="button" className="chip" style={{ width: 'fit-content' }} onClick={() => go('beheer')}><MessageSquareWarning size={14} /> Naar de beheerpagina</button>
         </div>
       )}
 

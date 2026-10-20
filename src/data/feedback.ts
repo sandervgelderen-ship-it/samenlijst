@@ -16,10 +16,13 @@ export const SCREENSHOT_MAX = 700_000;
 export const NO_CAPTURE = 'data-niet-vastleggen';
 export const APP_VERSION = String(import.meta.env.VITE_APP_VERSION || 'dev').slice(0, 7);
 
+export type FeedbackStatus = 'nieuw' | 'bij-claude' | 'afgehandeld';
 export type FeedbackContext = Record<string, string | number | boolean | null | { at: string; screen: string }[]>;
 export type Feedback = {
   id: string; uid: string; email: string | null; name: string | null; createdAt: string;
-  text: string; screenshot?: string | null; status: 'nieuw' | 'afgehandeld'; handledAt?: string | null;
+  text: string; screenshot?: string | null; status: FeedbackStatus; handledAt?: string | null;
+  /** The admin's remark when handing it to Claude, and Claude's note on what changed (or its question). */
+  adminNote?: string | null; sentToClaudeAt?: string | null; claudeNote?: string | null;
   context: FeedbackContext; logs: FeedbackLog[];
 };
 
@@ -118,8 +121,15 @@ export async function loadFeedback(): Promise<Feedback[]> {
   return snap.docs.map(d => d.data() as Feedback);
 }
 
-export async function setFeedbackStatus(id: string, status: Feedback['status']) {
+export async function setFeedbackStatus(id: string, status: FeedbackStatus) {
   await updateDoc(doc(db, FEEDBACK, id), { status, handledAt: status === 'afgehandeld' ? new Date().toISOString() : null });
+}
+
+/** "Naar Claude": the scheduled Claude task picks up everything with status bij-claude, with this remark. */
+export async function sendToClaude(id: string, note: string) {
+  const patch = { status: 'bij-claude' as const, adminNote: note.trim().slice(0, 2000) || null, sentToClaudeAt: new Date().toISOString(), handledAt: null };
+  await updateDoc(doc(db, FEEDBACK, id), patch);
+  return patch;
 }
 
 const time = (iso: string) => (iso.length >= 19 ? iso.slice(0, 19).replace('T', ' ') : iso);
@@ -142,6 +152,8 @@ export function feedbackAsText(f: Feedback): string {
   if (screens.length) lines.push(`Laatste schermen: ${screens.map(s => `${s.screen} (${time(s.at).slice(11)})`).join(' → ')}`);
   lines.push('', f.logs?.length ? `Recente fouten en waarschuwingen (${f.logs.length}):` : 'Geen recente fouten of waarschuwingen.');
   for (const l of f.logs || []) lines.push(`- ${time(l.at).slice(11)} ${l.level === 'error' ? 'FOUT' : 'let op'}: ${l.message}`);
+  if (f.adminNote) lines.push('', `Opmerking van de beheerder: ${f.adminNote}`);
+  if (f.claudeNote) lines.push('', `Notitie van Claude: ${f.claudeNote}`);
   lines.push('', f.screenshot ? 'Er is een schermafbeelding bij.' : 'Geen schermafbeelding.');
   return lines.join('\n');
 }
