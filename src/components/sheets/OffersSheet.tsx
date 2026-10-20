@@ -29,6 +29,7 @@ export default function OffersSheet({ listId }: { listId: string }) {
   const list = useStore(s => s.lists.find(l => l.id === listId));
   const household = useHousehold();
   const busy = useStore(s => s.offersBusy);
+  const busyAt = useStore(s => s.offersBusyAt);
   const readOnly = useStore(s => s.readOnly);
   const aiOn = useStore(s => s.aiOn);
   useStore(s => s.items); // re-render when items change (added / noted)
@@ -117,7 +118,7 @@ export default function OffersSheet({ listId }: { listId: string }) {
           )}
         </>
       )}
-      {busy && <div className="thinking"><span className="dots" aria-hidden="true" />Gemini bladert door de folders van {place}…</div>}
+      {busy && <div className="thinking"><span className="dots" aria-hidden="true" />Gemini bladert door de folders{busyAt ? <> van {busyAt}</> : <> van {place}</>}…</div>}
       <div className="actions"><span /><button type="button" className="btn ghost" onClick={closeSheet}>Sluiten</button></div>
     </Sheet>
   );

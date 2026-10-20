@@ -118,6 +118,8 @@ const offB = cleanOffers({ offers: [{ store: 'Lidl', product: 'Brood', deal: '25
 const merged = mergeOffers([offB, offA], ['Vomar', 'Lidl', 'Jumbo']);
 t('aanbiedingen: winkels in gekozen volgorde, alleen met resultaat', () => assert.deepEqual(merged.stores, ['Vomar', 'Lidl']));
 t('aanbiedingen: passend bij de lijst eerst, alles erin', () => assert.deepEqual([merged.offers[0].product, merged.offers.length, merged.week], ['Melk', 4, '19 t/m 25 oktober']));
+const many = mergeOffers(['Albert Heijn', 'Vomar', 'Lidl'].map(st => cleanOffers({ offers: Array.from({ length: 40 }, (_, n) => ({ store: st, product: `${st} ${n}`, deal: '1+1' })) })), ['Albert Heijn', 'Vomar', 'Lidl']);
+t('aanbiedingen: om de beurt per winkel, niemand valt weg', () => assert.deepEqual([many.offers.slice(0, 3).map(o => o.store), many.offers.filter(o => o.store === 'Lidl').length > 25], [['Albert Heijn', 'Vomar', 'Lidl'], true]));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');

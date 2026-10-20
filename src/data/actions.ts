@@ -574,7 +574,18 @@ export async function findOffers() {
     // Chosen supermarkets: one search each, so every chain gets its turn. Otherwise Gemini finds them itself.
     const chosen = (h.supermarkets || []).filter(Boolean);
     const ask = (stores?: string[]) => post<Record<string, unknown>>('offers', { place: p, open, memory: memoryForAi(), today: todayLong(), stores });
-    const settled = chosen.length ? await Promise.allSettled(chosen.map(s => ask([s]))) : [{ status: 'fulfilled' as const, value: await ask() }];
+    // One supermarket at a time (several searches at once run into the AI limit), with one retry after a pause.
+    const settled: PromiseSettledResult<Record<string, unknown>>[] = [];
+    if (!chosen.length) settled.push({ status: 'fulfilled', value: await ask() });
+    for (const s of chosen) {
+      setS({ offersBusyAt: s });
+      try { settled.push({ status: 'fulfilled', value: await ask([s]) }); }
+      catch {
+        await new Promise(r => setTimeout(r, 4000));
+        try { settled.push({ status: 'fulfilled', value: await ask([s]) }); } catch (e) { settled.push({ status: 'rejected', reason: e }); }
+      }
+    }
+    const missed = chosen.filter((_, n) => settled[n]?.status === 'rejected');
     // Per chosen supermarket, its offers carry exactly the name the household chose (not "AH" vs "Albert Heijn").
     const parts = settled.flatMap((r, n) => {
       if (r.status !== 'fulfilled') return [];
@@ -591,9 +602,10 @@ export async function findOffers() {
     const result: OfferResult = { place: p, ...c, sources, searchHtml: (html || '').slice(0, 20000), at: Date.now() };
     if (!S().readOnly) write(() => updateDoc(hRef(h.id), { offers: result }));
     if (!c.offers.length) toast(`Geen aanbiedingen gevonden voor ${p}.`);
+    else if (missed.length) toast(`Bij ${missed.join(' en ')} lukte het zoeken niet; vannacht probeert Samenlijst het opnieuw.`);
   } catch (e) {
     toast((e as Error).message);
   } finally {
-    setS({ offersBusy: false });
+    setS({ offersBusy: false, offersBusyAt: null });
   }
 }

@@ -81,6 +81,8 @@ interface State {
   heard: string | null;
   /** Looking up supermarket offers right now (on request; normally it happens at night). */
   offersBusy: boolean;
+  /** The supermarket being searched right now. */
+  offersBusyAt: string | null;
 
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void;
 }
@@ -127,6 +129,7 @@ export const useStore = create<State>()((set) => ({
   analyzing: [],
   heard: null,
   offersBusy: false,
+  offersBusyAt: null,
 
   set: (patch) => set(patch as any),
 }));
