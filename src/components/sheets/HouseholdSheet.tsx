@@ -8,6 +8,8 @@ import { toast } from '../../data/toast';
 import { useStore } from '../../store/useStore';
 import { Avatar, useHousehold, useNames } from '../bits';
 import { useInstall } from '../InstallPrompt';
+import { Supermarkets } from './OffersSheet';
+import { APP_VERSION } from '../../data/feedback';
 import { isAdmin } from '../../data/feedback';
 import { go } from '../../data/actions';
 import { Sheet, closeSheet } from './Sheets';
@@ -18,6 +20,7 @@ export default function HouseholdSheet() {
   const user = useStore(s => s.user);
   const apiUrl = useStore(s => s.apiUrl);
   const aiOn = useStore(s => s.aiOn);
+  const readOnly = useStore(s => s.readOnly);
   const { full } = useNames();
   const [name, setName] = useState(h?.name || '');
   const [place, setPlace] = useState(h?.place || '');
@@ -52,6 +55,12 @@ export default function HouseholdSheet() {
           onBlur={() => place.trim() !== (h.place || '') && run(() => setHouseholdPlace(h, place), place.trim() ? 'Woonplaats bewaard. Vannacht zoekt Samenlijst de aanbiedingen.' : undefined)} />
         <span className="note">Elke nacht zoekt Samenlijst de supermarktaanbiedingen in deze plaats.</span>
       </label>
+      {(h.place || '').trim() && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <span className="lbl2">Supermarkten</span>
+          <Supermarkets h={h} found={h.offers?.stores || []} canSearch={aiOn && !readOnly} />
+        </div>
+      )}
 
       <div style={{ display: 'grid', gap: 8 }}>
         <span className="lbl2">Wie doen er mee</span>
@@ -122,7 +131,7 @@ export default function HouseholdSheet() {
         </div>
       )}
 
-      <p className="note">Ingelogd als {user.email || user.name}. Dit is hetzelfde account als in Moestuin.</p>
+      <p className="note">Ingelogd als {user.email || user.name}. Dit is hetzelfde account als in Moestuin. Versie {APP_VERSION}.</p>
       <div className="actions">
         <button type="button" className={`btn danger ${armed ? 'armed' : ''}`} disabled={busy}
           onClick={() => { if (!armed) { setArmed(true); setTimeout(() => setArmed(false), 4000); return; } run(async () => { await leaveHousehold(h); closeSheet(); }); }}>

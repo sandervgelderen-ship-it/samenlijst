@@ -124,7 +124,7 @@ export default function OffersSheet({ listId }: { listId: string }) {
 }
 
 /** Which supermarkets to search. Chosen ones are each searched on their own, so none is missed. */
-function Supermarkets({ h, found, canSearch }: { h: Household; found: string[]; canSearch: boolean }) {
+export function Supermarkets({ h, found, canSearch }: { h: Household; found: string[]; canSearch: boolean }) {
   const chosen = h.supermarkets || [];
   const [edit, setEdit] = useState<string[] | null>(null);
   const [extra, setExtra] = useState('');
