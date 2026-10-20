@@ -158,11 +158,16 @@ export const OFFERS_SHAPE = '{"week":"20 t/m 26 oktober","stores":["Albert Heijn
 /** Supermarket offers near a place, found with Google Search (grounding). */
 export function offersPrompt(b: any) {
   const place = s(b.place, 80);
+  const chosen = (Array.isArray(b.stores) ? b.stores : []).map((x: unknown) => s(x, 40)).filter(Boolean).slice(0, 12);
+  const step1 = chosen.length
+    ? `1. Zoek alleen bij ${chosen.length === 1 ? 'deze supermarkt' : 'deze supermarkten'}: ${chosen.join(', ')}. Het huishouden doet daar boodschappen; ga ervan uit dat ${chosen.length === 1 ? 'hij' : 'ze'} in of bij ${place} ${chosen.length === 1 ? 'zit' : 'zitten'}. Zoek op de eigen site en de folder van ${chosen.length === 1 ? 'die keten' : 'elke keten'} (bijv. "${chosen[0]} folder deze week").`
+    : `1. Zoek uit welke supermarkten er in of bij ${place} zitten (bijvoorbeeld Albert Heijn, Jumbo, Lidl, Aldi, Plus, Dirk, Vomar, Hoogvliet, Coop, Spar, DekaMarkt, Poiesz, Boni, Nettorama, Ekoplaza). Zoek per keten na of er een vestiging is; neem alle ketens die daar een winkel hebben, ook discounters als Lidl, Aldi en Vomar.`;
+  const max = chosen.length === 1 ? 12 : 25;
   return `Zoek met Google Search de supermarktaanbiedingen die nu geldig zijn in of vlak bij ${place} (Nederland). Vandaag is het ${s(b.today, 60)}.
-1. Zoek uit welke supermarkten er in of bij ${place} zitten (bijvoorbeeld Albert Heijn, Jumbo, Lidl, Aldi, Plus, Dirk, Vomar, Hoogvliet, Coop, Spar, DekaMarkt, Poiesz, Boni, Nettorama, Ekoplaza). Neem alleen ketens die daar echt een winkel hebben.
-2. Zoek in hun actuele folders en bonuspagina's de aanbiedingen van deze week. Gebruik alleen aanbiedingen die je echt gevonden hebt; verzin niets en neem geen verlopen acties.
+${step1}
+2. Zoek in hun actuele folders en bonuspagina's de aanbiedingen van deze week. Gebruik alleen aanbiedingen die je echt gevonden hebt; verzin niets en neem geen verlopen acties. Landelijke folderaanbiedingen van de keten gelden ook in ${place}.
 3. Geef voorrang aan aanbiedingen voor wat er op de boodschappenlijst staat: ${list(b.open, 60)}. Zet bij zo'n aanbieding in "match" het item van de lijst waar hij bij past.
-4. Vul aan met andere opvallende aanbiedingen van gewone boodschappen, tot hooguit 25 in totaal.
+4. Vul aan met andere opvallende aanbiedingen van gewone boodschappen, tot hooguit ${max} in totaal${chosen.length > 1 ? ', verdeeld over de supermarkten' : ''}.
 Voorkeuren van dit huishouden (houd er rekening mee):
 ${memory(b.memory)}
 

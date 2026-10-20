@@ -250,6 +250,8 @@ export function memoryLines(memory: Pick<Memory, 'text' | 'list' | 'at'>[], list
 
 /* ---------- Where to buy it ---------- */
 export const SUPERMARKT = 'Supermarkt';
+/** Dutch supermarket chains to pick from for the offers. */
+export const CHAINS = ['Albert Heijn', 'Jumbo', 'Lidl', 'Aldi', 'Plus', 'Dirk', 'Vomar', 'DekaMarkt', 'Hoogvliet', 'Coop', 'Spar', 'Poiesz', 'Ekoplaza', 'Picnic'];
 export const STORES = [SUPERMARKT, 'Drogist', 'Bouwmarkt', 'Tuincentrum', 'Dierenwinkel', 'Apotheek', 'Slager', 'Bakker', 'Markt', 'Online'];
 const STORE_ALIASES: [RegExp, string][] = [
   [/^(supermarkt|super|ah|albert heijn|jumbo|lidl|aldi|plus|dirk|coop|spar|vomar|dekamarkt|hoogvliet|picnic|crisp)$/, SUPERMARKT],

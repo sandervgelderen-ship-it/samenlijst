@@ -1,7 +1,7 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
 import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem } from '../src/lib/domain';
-import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules } from '../src/lib/aiClean';
+import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules, mergeOffers } from '../src/lib/aiClean';
 import type { Item, List } from '../src/types';
 
 const now = new Date('2026-10-17T09:00:00'); // a Saturday
@@ -111,6 +111,13 @@ t('aanbieding: woorden van het item in het product', () => assert.deepEqual(
   ['AH Halfvolle melk 1 L', 'Ecover WC-reiniger', 'Ecover toiletreiniger 750 ml', 'Kaasstengels'].map(p => offerItem({ product: p, match: '' }, shopping)?.text ?? null),
   ['Halfvolle melk', null, 'Toiletreiniger', null]));
 t('aanbieding: verlopen weg', () => assert.deepEqual(liveOffers([{ until: '2026-10-19' }, { until: '2026-10-20' }, { until: null }], '2026-10-20').length, 2));
+
+// Aanbiedingen per gekozen supermarkt
+const offA = cleanOffers({ week: '19 t/m 25 oktober', offers: [{ store: 'Vomar', product: 'Melk', deal: '1+1', match: 'Melk' }, { store: 'Vomar', product: 'Kaas', deal: '2e halve prijs' }] });
+const offB = cleanOffers({ offers: [{ store: 'Lidl', product: 'Brood', deal: '25% korting' }, { store: 'Lidl', product: 'Melk', deal: '1+1' }] });
+const merged = mergeOffers([offB, offA], ['Vomar', 'Lidl', 'Jumbo']);
+t('aanbiedingen: winkels in gekozen volgorde, alleen met resultaat', () => assert.deepEqual(merged.stores, ['Vomar', 'Lidl']));
+t('aanbiedingen: passend bij de lijst eerst, alles erin', () => assert.deepEqual([merged.offers[0].product, merged.offers.length, merged.week], ['Melk', 4, '19 t/m 25 oktober']));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');

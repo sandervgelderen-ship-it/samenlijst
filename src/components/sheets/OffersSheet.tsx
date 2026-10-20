@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { BadgePercent, Check, Plus, StickyNote } from 'lucide-react';
-import { dueInfo, liveOffers, offerItem, todayISO } from '../../lib/domain';
+import { BadgePercent, Check, Plus, Search, Store as StoreIcon, StickyNote } from 'lucide-react';
+import { CHAINS, dueInfo, liveOffers, offerItem, todayISO } from '../../lib/domain';
 import { addItem, findOffers, listItems, updateItem } from '../../data/actions';
 import { setS, useStore } from '../../store/useStore';
 import type { Offer } from '../../types';
 import { useHousehold } from '../bits';
+import { setHouseholdSupermarkets } from '../../data/repo';
+import { toast } from '../../data/toast';
+import type { Household } from '../../types';
 import { Sheet, closeSheet } from './Sheets';
 
 /** "vannacht om 03:14", "gisteren om 03:12", "op maandag" */
@@ -78,6 +81,7 @@ export default function OffersSheet({ listId }: { listId: string }) {
   return (
     <Sheet label="Aanbiedingen">
       <h3><span className="spk"><BadgePercent /></span>Aanbiedingen</h3>
+      {place && !readOnly && <Supermarkets h={household} found={result?.stores || []} canSearch={aiOn && !busy} />}
 
       {!place ? (
         <>
@@ -116,5 +120,42 @@ export default function OffersSheet({ listId }: { listId: string }) {
       {busy && <div className="thinking"><span className="dots" aria-hidden="true" />Gemini bladert door de folders van {place}…</div>}
       <div className="actions"><span /><button type="button" className="btn ghost" onClick={closeSheet}>Sluiten</button></div>
     </Sheet>
+  );
+}
+
+/** Which supermarkets to search. Chosen ones are each searched on their own, so none is missed. */
+function Supermarkets({ h, found, canSearch }: { h: Household; found: string[]; canSearch: boolean }) {
+  const chosen = h.supermarkets || [];
+  const [edit, setEdit] = useState<string[] | null>(null);
+  const [extra, setExtra] = useState('');
+  const options = [...new Set([...chosen, ...found, ...CHAINS])];
+  const toggle = (s: string) => setEdit(e => (e!.includes(s) ? e!.filter(x => x !== s) : [...e!, s]));
+  async function save() {
+    const next = [...edit!, ...(extra.trim() ? [extra.trim()] : [])];
+    try {
+      await setHouseholdSupermarkets(h, next);
+      setEdit(null); setExtra('');
+      if (canSearch && next.length) { toast(`Zoeken bij ${next.join(', ')}…`); void findOffers(); }
+    } catch (e) { console.warn(e); toast('Opslaan lukte niet.'); }
+  }
+  if (!edit) return (
+    <div className="supers">
+      <StoreIcon size={15} aria-hidden="true" />
+      <span>{chosen.length ? <>Zoekt bij <b>{chosen.join(', ')}</b></> : 'Gemini kiest de supermarkten zelf'}</span>
+      <button type="button" className="linkbtn" onClick={() => setEdit(chosen.length ? chosen : found)}>{chosen.length ? 'Aanpassen' : 'Zelf kiezen'}</button>
+    </div>
+  );
+  return (
+    <div className="supers-edit">
+      <p className="lbl2">Bij welke supermarkten doen jullie boodschappen?</p>
+      <div className="aiex">
+        {options.map(s => <button key={s} type="button" className="chip" aria-pressed={edit.includes(s)} onClick={() => toggle(s)}>{edit.includes(s) && <Check size={13} />}{s}</button>)}
+      </div>
+      <input className="field" value={extra} maxLength={40} onChange={e => setExtra(e.target.value)} placeholder="Andere supermarkt, bijv. Boni" />
+      <div className="pacts">
+        <button type="button" className="btn" onClick={() => void save()}><Search size={15} /> Bewaar{canSearch ? ' en zoek' : ''}</button>
+        <button type="button" className="linkbtn" onClick={() => setEdit(null)}>Annuleren</button>
+      </div>
+    </div>
   );
 }

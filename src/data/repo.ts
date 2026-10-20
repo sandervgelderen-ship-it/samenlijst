@@ -200,6 +200,12 @@ export async function setHouseholdPlace(h: Household, place: string) {
   await updateDoc(doc(db, HH, h.id), p === (h.place || '') ? { place: p } : { place: p, offers: null });
 }
 
+/** The supermarkets whose offers this household wants to see. */
+export async function setHouseholdSupermarkets(h: Household, stores: string[]) {
+  const clean = [...new Set(stores.map(s => s.trim().replace(/\s+/g, ' ').slice(0, 40)).filter(Boolean))].slice(0, 12);
+  await updateDoc(doc(db, HH, h.id), { supermarkets: clean });
+}
+
 export async function leaveHousehold(h: Household) {
   const uid = S().user!.uid;
   const members = h.members.filter(m => m !== uid);

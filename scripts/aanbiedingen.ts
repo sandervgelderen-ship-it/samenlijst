@@ -16,7 +16,7 @@ import { applicationDefault, initializeApp as initAdmin } from 'firebase-admin/a
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
-import { cleanOffers, groundingSources, parseLoose } from '../src/lib/aiClean';
+import { cleanOffers, groundingSources, mergeOffers, parseLoose } from '../src/lib/aiClean';
 import { memoryLines, todayLong } from '../src/lib/domain';
 import { OFFERS_SHAPE, offersPrompt } from '../src/server/prompts';
 import type { List, Memory, OfferResult } from '../src/types';
@@ -72,17 +72,33 @@ for (const h of households.docs) {
     const open = itemsSnap.docs.map(d => d.data()).filter(i => shop.has(i.listId)).map(i => String(i.text || '')).filter(Boolean).slice(0, 60);
     const memory = memoryLines(kbSnap.docs.map(d => ({ id: d.id, ...d.data() }) as Memory), lists);
 
-    const prompt = `${offersPrompt({ place, open, memory, today: todayLong() })}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet bekend is):\n${OFFERS_SHAPE}`;
-    const result = await search(prompt);
-    const meta = result.response.candidates?.[0]?.groundingMetadata;
-    const c = cleanOffers(parseLoose(result.response.text()));
+    // Chosen supermarkets: one search each, so every chain gets its turn. Otherwise Gemini finds them itself.
+    const chosen = (Array.isArray(h.get('supermarkets')) ? h.get('supermarkets') as unknown[] : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 12);
+    const parts: ReturnType<typeof cleanOffers>[] = [], metas: unknown[] = [];
+    for (const store of chosen.length ? chosen : [null]) {
+      const prompt = `${offersPrompt({ place, open, memory, today: todayLong(), stores: store ? [store] : undefined })}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet bekend is):\n${OFFERS_SHAPE}`;
+      try {
+        const result = await search(prompt);
+        metas.push(result.response.candidates?.[0]?.groundingMetadata);
+        const c = cleanOffers(parseLoose(result.response.text()));
+        parts.push(store ? { ...c, stores: [store], offers: c.offers.map(o => ({ ...o, store })) } : c);
+        if (store) say(`  ${store}: ${c.offers.length} aanbiedingen`);
+      } catch (e) {
+        say(`  ${store || place}: mislukt: ${String((e as Error)?.message || e).slice(0, 200)}`);
+        if (!store) throw e;
+      }
+      if (store) await pause(1500);
+    }
+    const meta = metas.find(Boolean) as { searchEntryPoint?: { renderedContent?: string } } | undefined;
+    const c = mergeOffers(parts, chosen);
+    const allSources = [...new Map(metas.flatMap(m => groundingSources(m)).map(x => [x.uri, x])).values()].slice(0, 12);
     if (!c.offers.length) {
       // Keep what was there: an empty answer is more often a hiccup than a week without offers.
       say(`${h.id} (${place}): geen aanbiedingen gevonden, vorige resultaat blijft staan`);
       failed++;
     } else {
       const offers: OfferResult = {
-        place, ...c, sources: groundingSources(meta),
+        place, ...c, sources: allSources,
         searchHtml: String(meta?.searchEntryPoint?.renderedContent || '').slice(0, 20000), at: Date.now(),
       };
       await h.ref.update({ offers });

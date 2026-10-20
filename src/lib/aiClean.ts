@@ -143,6 +143,21 @@ export function cleanOffers(data: unknown): { week: string; stores: string[]; of
   return { week: str(o.week, 60), stores, offers };
 }
 
+/**
+ * Offers searched per supermarket (one search each, so a big chain cannot crowd out the others), put together:
+ * the chosen supermarkets in their order, list matches first, at most 60.
+ */
+export function mergeOffers(parts: { week: string; stores: string[]; offers: Offer[] }[], chosen: string[] = []) {
+  const seen = new Set<string>(), offers: Offer[] = [];
+  for (const p of parts) for (const o of p.offers) {
+    const k = kbKey(o.store + ' ' + o.product); if (seen.has(k)) continue; seen.add(k); offers.push(o);
+  }
+  offers.sort((a, b) => (b.match ? 1 : 0) - (a.match ? 1 : 0));
+  const found = new Set(offers.map(o => o.store));
+  const stores = [...new Set([...chosen.filter(s => found.has(s)), ...parts.flatMap(p => p.stores).filter(s => found.has(s))])].slice(0, 12);
+  return { week: parts.find(p => p.week)?.week || '', stores, offers: offers.slice(0, 60) };
+}
+
 /** JSON from a free-text model answer: the whole text, a ```json block, or the first {...} / [...] in it. */
 export function parseLoose(text: string): unknown {
   const out = String(text || '').trim();

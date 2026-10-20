@@ -4,7 +4,7 @@
  */
 import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { post } from '../api';
-import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, cleanQuestions, cleanRules, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
+import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, mergeOffers, cleanQuestions, cleanRules, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
 import {
   CAT_LABEL, catFor, colorOf, COLORS, decideStore, isSuper, kbKey, knownStore, makeMemory, memoryLines, normStore, parseDue, parseEntry, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS,
 } from '../lib/domain';
@@ -571,11 +571,24 @@ export async function findOffers() {
   const open = S().items.filter(i => !i.done && shop.has(i.listId)).map(i => i.text).slice(0, 60);
   setS({ offersBusy: true });
   try {
-    const raw = await post<Record<string, unknown>>('offers', { place: p, open, memory: memoryForAi(), today: todayLong() });
-    const c = cleanOffers(raw);
-    const src = Array.isArray(raw?._sources) ? (raw!._sources as { title?: unknown; uri?: unknown }[]) : [];
-    const sources = src.map(x => ({ title: String(x?.title || '').slice(0, 80), uri: String(x?.uri || '') })).filter(x => /^https?:\/\//.test(x.uri)).slice(0, 8);
-    const result: OfferResult = { place: p, ...c, sources, searchHtml: typeof raw?._searchHtml === 'string' ? raw._searchHtml.slice(0, 20000) : '', at: Date.now() };
+    // Chosen supermarkets: one search each, so every chain gets its turn. Otherwise Gemini finds them itself.
+    const chosen = (h.supermarkets || []).filter(Boolean);
+    const ask = (stores?: string[]) => post<Record<string, unknown>>('offers', { place: p, open, memory: memoryForAi(), today: todayLong(), stores });
+    const settled = chosen.length ? await Promise.allSettled(chosen.map(s => ask([s]))) : [{ status: 'fulfilled' as const, value: await ask() }];
+    // Per chosen supermarket, its offers carry exactly the name the household chose (not "AH" vs "Albert Heijn").
+    const parts = settled.flatMap((r, n) => {
+      if (r.status !== 'fulfilled') return [];
+      const c = cleanOffers(r.value);
+      return [{ raw: r.value, c: chosen[n] ? { ...c, stores: [chosen[n]], offers: c.offers.map(o => ({ ...o, store: chosen[n] })) } : c }];
+    });
+    if (!parts.length) throw new Error('Zoeken lukte niet. Probeer het zo opnieuw.');
+    const raws = parts.map(x => x.raw);
+    const c = mergeOffers(parts.map(x => x.c), chosen);
+    const src = raws.flatMap(raw => (Array.isArray(raw?._sources) ? (raw!._sources as { title?: unknown; uri?: unknown }[]) : []));
+    const sources = [...new Map(src.map(x => [String(x?.uri || ''), { title: String(x?.title || '').slice(0, 80), uri: String(x?.uri || '') }])).values()]
+      .filter(x => /^https?:\/\//.test(x.uri)).slice(0, 12);
+    const html = raws.map(r => r?._searchHtml).find(x => typeof x === 'string' && x) as string | undefined;
+    const result: OfferResult = { place: p, ...c, sources, searchHtml: (html || '').slice(0, 20000), at: Date.now() };
     if (!S().readOnly) write(() => updateDoc(hRef(h.id), { offers: result }));
     if (!c.offers.length) toast(`Geen aanbiedingen gevonden voor ${p}.`);
   } catch (e) {

@@ -21,6 +21,8 @@ export interface Household {
   place?: string;
   /** This week's supermarket offers for the place, found at night (or on request). */
   offers?: OfferResult | null;
+  /** The supermarkets this household uses; offers are searched at each of them. Empty: Gemini finds them. */
+  supermarkets?: string[];
 }
 
 export interface Shopper {
