@@ -4,7 +4,7 @@
  * and the household memory (general preferences, never single items).
  * No Firebase, no React: tested in scripts/test-domain.ts.
  */
-import type { CatId, ColorName, Entry, Item, List, Memory, RouteWhy } from '../types';
+import type { CatId, ColorName, Entry, Item, List, Memory, Offer, RouteWhy } from '../types';
 
 /* ---------- Aisles ---------- */
 export const CATS: [CatId, string, string][] = [
@@ -297,6 +297,31 @@ export function storeOptions(guess: string | null, used: (string | null | undefi
   [...counts.entries()].sort((a, b) => b[1] - a[1]).forEach(([n]) => add(n));
   STORES.forEach(add);
   return out;
+}
+
+/* ---------- Aanbiedingen ---------- */
+/** Offers still valid today (no end date = valid for the folder week). */
+export function liveOffers<T extends Pick<Offer, 'until'>>(offers: T[] | undefined, today = todayISO()): T[] {
+  return (offers || []).filter(o => !o.until || o.until >= today);
+}
+
+/**
+ * The item on the list an offer is for: the item Gemini named, or an item whose words all appear in the
+ * product ("Halfvolle melk" in "AH halfvolle melk 1 L"). The list changes during the day, so this is checked live.
+ */
+export function offerItem<T extends Pick<Item, 'text'>>(o: Pick<Offer, 'product' | 'match'>, items: T[]): T | undefined {
+  const mk = kbKey(o.match || '');
+  if (mk) { const hit = items.find(i => kbKey(i.text) === mk); if (hit) return hit; }
+  const pw = kbKey(o.product).split(/[\s-]+/).filter(w => w.length >= 4);
+  // A word of the item is in the product as a word, or (5+ letters) as part of one: "toiletreiniger" in "wc-toiletreiniger".
+  const has = (w: string) => pw.some(p => p === w || (w.length >= 5 && (p.startsWith(w) || p.endsWith(w))));
+  let best: T | undefined, bestLen = 0;
+  for (const i of items) {
+    const iw = kbKey(i.text).split(/[\s-]+/).filter(w => w.length >= 4);
+    // The most specific item wins: "Halfvolle melk" over "Melk".
+    if (iw.length > bestLen && iw.every(has)) { best = i; bestLen = iw.length; }
+  }
+  return best;
 }
 
 /* ---------- Look ---------- */

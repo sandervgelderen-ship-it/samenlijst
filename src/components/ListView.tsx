@@ -1,10 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { BadgePercent, Check, Pencil, Plus, ShoppingCart, Sparkles, Store } from 'lucide-react';
-import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, normStore } from '../lib/domain';
+import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem } from '../lib/domain';
 import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
 import type { CatId, Item, List, PlanQuestions } from '../types';
-import { Avatar, Doodle, useNames } from './bits';
+import { Avatar, Doodle, useHousehold, useNames } from './bits';
 import StoreAsks from './StoreAsks';
 
 const SHOPPING_FOR = 3 * 3600e3;
@@ -18,9 +18,13 @@ export default function ListView({ list: l }: { list: List }) {
   const ghosts = analyzing.filter(g => g.listId === l.id);
   const me = useStore(s => s.user?.uid);
   const { first } = useNames();
+  const household = useHousehold();
 
   const its = all.filter(i => i.listId === l.id);
   let open = its.filter(i => !i.done);
+  // This week's offers (found at night) for things on this list.
+  const offers = l.kind === 'shop' && household?.offers && household.offers.place === (household.place || '').trim() ? liveOffers(household.offers.offers) : [];
+  const onSale = offers.filter(o => offerItem(o, open)).length;
   const done = its.filter(i => i.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
   if (l.kind === 'todo' && onlyMine) open = open.filter(i => i.assignee === me);
   const shopper = l.shopper && l.shopper.by && Date.now() - l.shopper.at < SHOPPING_FOR ? l.shopper : null;
@@ -52,8 +56,10 @@ export default function ListView({ list: l }: { list: List }) {
         {aiOn && !readOnly && l.kind === 'shop' && open.length >= 2 && (
           <button className="chip ai" onClick={() => setS({ sheet: { kind: 'smart', mode: 'forgot', listId: l.id } })}><Sparkles size={15} /> Wat vergeet ik?</button>
         )}
-        {aiOn && l.kind === 'shop' && (
-          <button className="chip ai" onClick={() => setS({ sheet: { kind: 'offers', listId: l.id } })}><BadgePercent size={15} /> Aanbiedingen</button>
+        {l.kind === 'shop' && (aiOn || offers.length > 0) && (
+          <button className="chip ai" onClick={() => setS({ sheet: { kind: 'offers', listId: l.id } })}>
+            <BadgePercent size={15} /> Aanbiedingen{onSale ? ` · ${onSale} voor je lijst` : offers.length ? ` · ${offers.length}` : ''}
+          </button>
         )}
         {aiOn && !readOnly && l.kind === 'todo' && (
           <button className="chip ai" onClick={() => setS({ sheet: { kind: 'smart', mode: 'add', listId: l.id } })}><Sparkles size={15} /> Plan iets groots</button>
@@ -151,13 +157,19 @@ function groupByAisle(items: Item[]): [CatId, Item[]][] {
   return (Object.keys(groups) as CatId[]).sort((a, b) => CAT_ORDER[a] - CAT_ORDER[b]).map(c => [c, groups[c]!]);
 }
 
+const o2s = (o: { deal: string; price: string; store: string; product: string }) => `${o.product}: ${o.deal}${o.price ? ' ' + o.price : ''} bij ${o.store}`;
+
 function ItemRow({ item: i, kind }: { item: Item; kind: 'shop' | 'todo' }) {
   const readOnly = useStore(s => s.readOnly);
   const popId = useStore(s => s.popId);
   const flashId = useStore(s => s.flashId);
   const me = useStore(s => s.user?.uid);
   const { first } = useNames();
+  const household = useHousehold();
   const ref = useRef<HTMLDivElement>(null);
+  // An offer this week for this item (unless it is already noted on it).
+  const offer = kind === 'shop' && !i.done && household?.offers && household.offers.place === (household.place || '').trim()
+    ? liveOffers(household.offers.offers).find(o => offerItem(o, [i]) && !(i.note || '').includes(o.store)) : undefined;
 
   useEffect(() => {
     if (popId === i.id) { const t = setTimeout(() => setS({ popId: null }), 600); return () => clearTimeout(t); }
@@ -172,6 +184,7 @@ function ItemRow({ item: i, kind }: { item: Item; kind: 'shop' | 'todo' }) {
   const subs: ReactNode[] = [];
   if (i.note) subs.push(<span key="n">{i.note}</span>);
   if (i.urgent && !i.done) subs.push(<span key="u" className="flag">Dringend</span>);
+  if (offer) subs.push(<span key="o" className="flag offer-flag" title={`${o2s(offer)}`}>% {offer.deal || 'Aanbieding'} · {offer.store}</span>);
   if (kind === 'todo' && i.due && !i.done) { const d = dueInfo(i.due); subs.push(<span key="d" className={`flag ${d.late ? 'late' : d.soon ? '' : 'calm'}`}>{d.label}</span>); }
   if (i.done && i.doneBy) subs.push(<span key="b">{first(i.doneBy)}{kind === 'shop' ? ' heeft het' : ' deed dit'}</span>);
   else if (i.addedBy && i.addedBy !== me && kind === 'shop') subs.push(<span key="a">van {first(i.addedBy)}</span>);

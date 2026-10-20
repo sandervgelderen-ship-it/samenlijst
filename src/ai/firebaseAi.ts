@@ -7,8 +7,9 @@
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { app } from '../firebase';
 import {
-  analyzePrompt, elaboratePrompt, forgotPrompt, learnPrompt, offersPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+  analyzePrompt, elaboratePrompt, forgotPrompt, learnPrompt, OFFERS_SHAPE, offersPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
 } from '../server/prompts';
+import { groundingSources, parseLoose } from '../lib/aiClean';
 
 // Newest stable model first; older ones only if a model is not available for this project.
 const MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'];
@@ -52,7 +53,7 @@ const SHAPE: Record<string, string> = {
   'voice-memo': '{"transcript":"...","items":[{"text":"Melk","qty":"2 pak","due":""}]}',
   'route-items': '[{"i":0,"list":"<lijst-id>","confidence":0.9}]',
   'learn': '{"rules":[{"text":"Schoonmaakproducten moeten ecologisch zijn","topic":"Schoonmaak","list":""}]}',
-  'offers': '{"week":"20 t/m 26 oktober","stores":["Albert Heijn","Jumbo"],"offers":[{"store":"Albert Heijn","product":"Halfvolle melk","deal":"2e halve prijs","price":"€1,19","until":"2026-10-26","match":"Melk","cat":"zuivel"}]}',
+  'offers': OFFERS_SHAPE,
 };
 
 function media(dataUrl: unknown, kind: 'image' | 'audio') {
@@ -92,32 +93,13 @@ export async function runLocal(path: string, body: any): Promise<unknown> {
   return parseLoose(result.response.text());
 }
 
-/** JSON from a model answer: the whole text, a ```json block, or the first {...} / [...] in it. */
-function parseLoose(text: string): unknown {
-  const out = String(text || '').trim();
-  try { return JSON.parse(out); }
-  catch {
-    const m = out.match(/```(?:json)?\s*([\s\S]*?)```/) || out.match(/([\[{][\s\S]*[\]}])/);
-    if (m) { try { return JSON.parse(m[1]); } catch { /* fall through */ } }
-    return {};
-  }
-}
-
 /** Supermarket offers: Gemini searches Google, so the answer is current; we keep the sources it used. */
 async function offers(body: any) {
   if (!String(body?.place || '').trim()) throw new Error('Kies eerst een plaats.');
   const text = `${offersPrompt(body)}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet bekend is):\n${SHAPE.offers}`;
   const result = await generate([text], true);
   const meta = result.response.candidates?.[0]?.groundingMetadata;
-  const seen = new Set<string>();
-  const sources: { title: string; uri: string }[] = [];
-  for (const c of meta?.groundingChunks || []) {
-    const uri = c.web?.uri || '';
-    if (!/^https?:\/\//.test(uri) || seen.has(uri)) continue;
-    seen.add(uri);
-    sources.push({ title: String(c.web?.title || c.web?.domain || uri).slice(0, 80), uri });
-    if (sources.length >= 8) break;
-  }
+  const sources = groundingSources(meta);
   const data = parseLoose(result.response.text());
   const o = data && typeof data === 'object' && !Array.isArray(data) ? data : { offers: data };
   return { ...o, _sources: sources, _searchHtml: meta?.searchEntryPoint?.renderedContent || '' };

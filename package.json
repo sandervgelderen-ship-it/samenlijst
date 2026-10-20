@@ -12,7 +12,8 @@
     "test": "tsx scripts/test-domain.ts",
     "android:sync": "vite build && node scripts/android-setup.cjs && npx cap sync android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
-    "gcp-build": "npm run build"
+    "gcp-build": "npm run build",
+    "aanbiedingen": "tsx scripts/aanbiedingen.ts"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.0.0",
@@ -39,6 +40,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "esbuild": "^0.25.0",
+    "firebase-admin": "^13.5.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2"

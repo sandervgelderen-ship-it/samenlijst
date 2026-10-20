@@ -142,3 +142,26 @@ export function cleanOffers(data: unknown): { week: string; stores: string[]; of
   const stores = [...new Set([...arr(o.stores).map(x => cap(str(x, 40))).filter(Boolean), ...offers.map(x => x.store)])].slice(0, 12);
   return { week: str(o.week, 60), stores, offers };
 }
+
+/** JSON from a free-text model answer: the whole text, a ```json block, or the first {...} / [...] in it. */
+export function parseLoose(text: string): unknown {
+  const out = String(text || '').trim();
+  try { return JSON.parse(out); } catch { /* try a fragment */ }
+  const m = out.match(/```(?:json)?\s*([\s\S]*?)```/) || out.match(/([\[{][\s\S]*[\]}])/);
+  if (m) { try { return JSON.parse(m[1]); } catch { /* give up */ } }
+  return {};
+}
+
+/** The web pages a Google Search-grounded answer used (Gemini groundingMetadata), deduplicated. */
+export function groundingSources(meta: unknown): { title: string; uri: string }[] {
+  const chunks = (meta as { groundingChunks?: { web?: { uri?: string; title?: string; domain?: string } }[] } | null)?.groundingChunks;
+  const seen = new Set<string>(), out: { title: string; uri: string }[] = [];
+  for (const c of Array.isArray(chunks) ? chunks : []) {
+    const uri = String(c?.web?.uri || '');
+    if (!/^https?:\/\//.test(uri) || seen.has(uri)) continue;
+    seen.add(uri);
+    out.push({ title: String(c?.web?.title || c?.web?.domain || uri).slice(0, 80), uri });
+    if (out.length >= 8) break;
+  }
+  return out;
+}

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Household, Item, List, ListKind, Memory, OfferResult, Pending, Receipt, StoreAsk } from '../types';
+import type { Household, Item, List, ListKind, Memory, Pending, Receipt, StoreAsk } from '../types';
 
 export interface AppUser {
   uid: string;
@@ -79,8 +79,7 @@ interface State {
   /** Entries the AI is analysing right now (listId null = quick add on the home screen). */
   analyzing: { pid: string; text: string; listId: string | null }[];
   heard: string | null;
-  /** The last supermarket offers found, for this session. */
-  offers: OfferResult | null;
+  /** Looking up supermarket offers right now (on request; normally it happens at night). */
   offersBusy: boolean;
 
   set: (patch: Partial<State> | ((s: State) => Partial<State>)) => void;
@@ -127,7 +126,6 @@ export const useStore = create<State>()((set) => ({
   listening: false,
   analyzing: [],
   heard: null,
-  offers: null,
   offersBusy: false,
 
   set: (patch) => set(patch as any),

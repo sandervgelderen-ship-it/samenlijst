@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { groundingSources, parseLoose } from '../../lib/aiClean';
 
 // ─── Model Name Constants ────────────────────────────────────────────────────
 // Update in one place whenever Google releases new model versions (same as Moestuin).
@@ -54,25 +55,4 @@ export async function generateGrounded(prompt: string): Promise<{ data: unknown;
   } as any);
   const meta = (response as any).candidates?.[0]?.groundingMetadata || {};
   return { data: parseLoose(response.text || ''), sources: groundingSources(meta), searchHtml: String(meta.searchEntryPoint?.renderedContent || '') };
-}
-
-/** JSON from a free-text answer: the whole text, a ```json block, or the first {...} / [...] in it. */
-export function parseLoose(text: string): unknown {
-  const out = String(text || '').trim();
-  try { return JSON.parse(out); } catch { /* try a fragment */ }
-  const m = out.match(/```(?:json)?\s*([\s\S]*?)```/) || out.match(/([\[{][\s\S]*[\]}])/);
-  if (m) { try { return JSON.parse(m[1]); } catch { /* give up */ } }
-  return {};
-}
-
-export function groundingSources(meta: any): { title: string; uri: string }[] {
-  const seen = new Set<string>();
-  const out: { title: string; uri: string }[] = [];
-  for (const c of Array.isArray(meta?.groundingChunks) ? meta.groundingChunks : []) {
-    const uri = String(c?.web?.uri || ''); if (!/^https?:\/\//.test(uri) || seen.has(uri)) continue;
-    seen.add(uri);
-    out.push({ title: String(c?.web?.title || c?.web?.domain || uri).slice(0, 80), uri });
-    if (out.length >= 8) break;
-  }
-  return out;
 }

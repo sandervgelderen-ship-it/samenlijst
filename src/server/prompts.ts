@@ -152,6 +152,9 @@ Leid hier alleen een regel uit af als er een blijvende voorkeur of afspraak uit 
 Per regel: "text" is één korte Nederlandse zin van minstens drie woorden, "topic" een onderwerp van 1 of 2 woorden, "list" een lijst-id als de regel over een lijst gaat, anders een lege string. Hooguit 3 regels; meestal 0 of 1.`;
 }
 
+/** The JSON shape the offers prompt asks for (search grounding cannot use a response schema). */
+export const OFFERS_SHAPE = '{"week":"20 t/m 26 oktober","stores":["Albert Heijn","Jumbo"],"offers":[{"store":"Albert Heijn","product":"Halfvolle melk","deal":"2e halve prijs","price":"€1,19","until":"2026-10-26","match":"Melk","cat":"zuivel"}]}';
+
 /** Supermarket offers near a place, found with Google Search (grounding). */
 export function offersPrompt(b: any) {
   const place = s(b.place, 80);

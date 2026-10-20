@@ -559,15 +559,16 @@ export const togglePlanOpen = (id: string) =>
 export const today = todayISO;
 export const CAT_OPTIONS = CATS.map(([id, label]) => ({ id, label }));
 
-/* ---------- Aanbiedingen: supermarket offers near the household's place ----------
- * Gemini searches Google (grounding), so the offers are this week's. Matches with the shopping list come first. */
-export async function findOffers(place: string, listId: string | null) {
-  const p = place.trim().slice(0, 80);
-  if (!p) { toast('Kies eerst een plaats.'); return; }
-  if (S().offersBusy) return;
+/* ---------- Aanbiedingen: supermarket offers for the household's woonplaats ----------
+ * Normally a job looks them up every night (scripts/aanbiedingen.ts) and stores them on the household.
+ * "Nu zoeken" does the same from the app, for when there is nothing yet. Gemini searches Google (grounding). */
+export async function findOffers() {
   const h = S().households.find(x => x.id === S().hid);
-  if (h && (h.place || '') !== p && !S().readOnly) write(() => updateDoc(hRef(h.id), { place: p }));
-  const open = (listId ? listItems(listId) : S().items.filter(i => listById(i.listId)?.kind === 'shop')).filter(i => !i.done).map(i => i.text).slice(0, 60);
+  const p = (h?.place || '').trim();
+  if (!h || !p) { toast('Vul eerst jullie woonplaats in bij Huishouden.'); return; }
+  if (S().offersBusy) return;
+  const shop = new Set(S().lists.filter(l => l.kind === 'shop').map(l => l.id));
+  const open = S().items.filter(i => !i.done && shop.has(i.listId)).map(i => i.text).slice(0, 60);
   setS({ offersBusy: true });
   try {
     const raw = await post<Record<string, unknown>>('offers', { place: p, open, memory: memoryForAi(), today: todayLong() });
@@ -575,8 +576,8 @@ export async function findOffers(place: string, listId: string | null) {
     const src = Array.isArray(raw?._sources) ? (raw!._sources as { title?: unknown; uri?: unknown }[]) : [];
     const sources = src.map(x => ({ title: String(x?.title || '').slice(0, 80), uri: String(x?.uri || '') })).filter(x => /^https?:\/\//.test(x.uri)).slice(0, 8);
     const result: OfferResult = { place: p, ...c, sources, searchHtml: typeof raw?._searchHtml === 'string' ? raw._searchHtml.slice(0, 20000) : '', at: Date.now() };
-    setS({ offers: result });
-    if (!c.offers.length) toast(`Geen aanbiedingen gevonden voor ${p}. Probeer een grotere plaats in de buurt.`);
+    if (!S().readOnly) write(() => updateDoc(hRef(h.id), { offers: result }));
+    if (!c.offers.length) toast(`Geen aanbiedingen gevonden voor ${p}.`);
   } catch (e) {
     toast((e as Error).message);
   } finally {

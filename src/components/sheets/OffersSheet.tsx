@@ -1,50 +1,58 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { BadgePercent, Check, Plus, StickyNote } from 'lucide-react';
-import { dueInfo, kbKey } from '../../lib/domain';
+import { dueInfo, liveOffers, offerItem, todayISO } from '../../lib/domain';
 import { addItem, findOffers, listItems, updateItem } from '../../data/actions';
-import { useStore } from '../../store/useStore';
+import { setS, useStore } from '../../store/useStore';
 import type { Offer } from '../../types';
 import { useHousehold } from '../bits';
 import { Sheet, closeSheet } from './Sheets';
 
+/** "vannacht om 03:14", "gisteren om 03:12", "op maandag" */
+function when(at: number) {
+  const d = new Date(at), today = todayISO();
+  const day = d.toLocaleDateString('sv-SE');
+  const time = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  if (day === today) return d.getHours() < 7 ? `vannacht om ${time}` : `vandaag om ${time}`;
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  if (day === y.toLocaleDateString('sv-SE')) return `gisteren om ${time}`;
+  return `op ${d.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' })}`;
+}
+
 /**
- * Supermarket offers near the household's place. Gemini searches Google for this week's folders;
- * offers for things on the list come first and can be noted on the item, others can be added.
+ * This week's supermarket offers in the household's woonplaats. A job looks them up every night;
+ * offers for things on the list (checked live) come first and can be noted on the item, others added.
  */
 export default function OffersSheet({ listId }: { listId: string }) {
   const list = useStore(s => s.lists.find(l => l.id === listId));
   const household = useHousehold();
-  const result = useStore(s => s.offers);
   const busy = useStore(s => s.offersBusy);
   const readOnly = useStore(s => s.readOnly);
+  const aiOn = useStore(s => s.aiOn);
   useStore(s => s.items); // re-render when items change (added / noted)
-  const [place, setPlace] = useState(() => result?.place || household?.place || '');
   const [store, setStore] = useState<string | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
-  if (!list) return null;
+  if (!list || !household) return null;
 
+  const place = (household.place || '').trim();
+  const result = household.offers && household.offers.place === place ? household.offers : null;
   const open = listItems(listId).filter(i => !i.done);
-  const itemFor = (o: Offer) => (o.match ? open.find(i => kbKey(i.text) === kbKey(o.match)) : undefined);
-  const shown = (result?.offers || []).filter(o => !store || o.store === store);
-  const forList = shown.filter(o => itemFor(o));
-  const others = shown.filter(o => !itemFor(o));
+  const all = liveOffers(result?.offers);
+  const shown = all.filter(o => !store || o.store === store);
+  const forList = shown.filter(o => offerItem(o, open));
+  const others = shown.filter(o => !offerItem(o, open));
+  const stores = (result?.stores || []).filter(s => all.some(o => o.store === s));
   const keyOf = (o: Offer) => o.store + '|' + o.product;
   const label = (o: Offer) => `${o.deal || 'Aanbieding'}${o.price ? ` ${o.price}` : ''} bij ${o.store}`.slice(0, 140);
 
-  function search(e?: FormEvent) {
-    e?.preventDefault();
-    setStore(null); setDone(new Set());
-    void findOffers(place, listId);
-  }
   function use(o: Offer) {
-    const it = itemFor(o);
+    const it = offerItem(o, open);
     if (it) updateItem(it.id, { note: label(o) });
     else addItem(listId, o.product, { note: label(o), cat: o.cat, quiet: true });
     setDone(new Set(done).add(keyOf(o)));
   }
 
   const row = (o: Offer) => {
-    const it = itemFor(o), used = done.has(keyOf(o));
+    const it = offerItem(o, open), used = done.has(keyOf(o));
     const until = o.until ? dueInfo(o.until) : null;
     return (
       <div className="kbrow offer" key={keyOf(o)}>
@@ -54,7 +62,7 @@ export default function OffersSheet({ listId }: { listId: string }) {
             <span className="flag">{o.deal || 'Aanbieding'}</span>
             {o.price && <b>{o.price}</b>}
             <span>{o.store}</span>
-            {until && <span>{until.late ? 'verlopen' : `t/m ${until.label.toLowerCase()}`}</span>}
+            {until && <span>t/m {until.label.toLowerCase()}</span>}
           </span>
           {it && <span className="sub">Voor <b>{it.text}</b> op je lijst</span>}
         </span>
@@ -70,26 +78,28 @@ export default function OffersSheet({ listId }: { listId: string }) {
   return (
     <Sheet label="Aanbiedingen">
       <h3><span className="spk"><BadgePercent /></span>Aanbiedingen</h3>
-      <p className="note">Gemini zoekt op internet de folders van deze week bij supermarkten in jullie plaats. Aanbiedingen voor wat op {list.name} staat komen bovenaan.</p>
-      <form className="memadd" onSubmit={search}>
-        <input className="field" id="offer-place" value={place} maxLength={80} onChange={e => setPlace(e.target.value)}
-          placeholder="Plaats of postcode, bijv. Utrecht" aria-label="Plaats" autoFocus={!place} enterKeyHint="search" />
-        <button className="btn" type="submit" disabled={busy || !place.trim()}>{result ? 'Opnieuw' : 'Zoek'}</button>
-      </form>
 
-      {busy && <div className="thinking"><span className="dots" aria-hidden="true" />Gemini bladert door de folders van {place.trim() || 'de buurt'}…</div>}
-
-      {!busy && result && (
+      {!place ? (
+        <>
+          <p className="note">Vul jullie woonplaats in bij Huishouden. Elke nacht zoekt Samenlijst dan de folders van de supermarkten daar door, en hier staan 's ochtends de aanbiedingen klaar.</p>
+          <div className="actions"><span /><button type="button" className="btn" onClick={() => setS({ sheet: { kind: 'household' } })}>Woonplaats invullen</button></div>
+        </>
+      ) : !result ? (
+        <>
+          <p className="note">Vannacht zoekt Samenlijst de aanbiedingen in {place}; morgenochtend staan ze hier.</p>
+          {aiOn && !readOnly && !busy && <div className="actions"><span /><button type="button" className="btn ghost" onClick={() => void findOffers()}>Nu alvast zoeken</button></div>}
+        </>
+      ) : (
         <>
           <p className="note">
-            {result.offers.length
-              ? <>{result.week ? <>{result.week} · </> : null}{result.offers.length} aanbiedingen in {result.place}</>
-              : <>Geen aanbiedingen gevonden voor {result.place}.</>}
+            {all.length
+              ? <>{result.week ? <>{result.week} · </> : null}{all.length} aanbiedingen in {place}, bijgewerkt {when(result.at)}. Wat bij {list.name} past staat bovenaan.</>
+              : <>Geen geldige aanbiedingen gevonden in {place} ({when(result.at)}). Vannacht kijkt Samenlijst opnieuw.</>}
           </p>
-          {result.stores.length > 1 && (
+          {stores.length > 1 && (
             <div className="aiex" role="group" aria-label="Supermarkt">
               <button type="button" className="chip" aria-pressed={!store} onClick={() => setStore(null)}>Alle</button>
-              {result.stores.map(s => <button key={s} type="button" className="chip" aria-pressed={store === s} onClick={() => setStore(store === s ? null : s)}>{s}</button>)}
+              {stores.map(s => <button key={s} type="button" className="chip" aria-pressed={store === s} onClick={() => setStore(store === s ? null : s)}>{s}</button>)}
             </div>
           )}
           {forList.length > 0 && <><p className="lbl2">Voor je lijst</p><div className="kbrows">{forList.map(row)}</div></>}
@@ -103,6 +113,7 @@ export default function OffersSheet({ listId }: { listId: string }) {
           )}
         </>
       )}
+      {busy && <div className="thinking"><span className="dots" aria-hidden="true" />Gemini bladert door de folders van {place}…</div>}
       <div className="actions"><span /><button type="button" className="btn ghost" onClick={closeSheet}>Sluiten</button></div>
     </Sheet>
   );

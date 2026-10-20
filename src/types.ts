@@ -17,8 +17,10 @@ export interface Household {
   inviteCode: string;
   createdBy: string;
   createdAt: number;
-  /** Where the household shops, for the supermarket offers ("Utrecht", "3511 AB"). */
+  /** Woonplaats: where the household shops; the offers are looked up for this place every night. */
   place?: string;
+  /** This week's supermarket offers for the place, found at night (or on request). */
+  offers?: OfferResult | null;
 }
 
 export interface Shopper {

@@ -9,7 +9,7 @@ Gedeelde boodschappen- en takenlijsten voor het hele huishouden. Gebouwd op deze
 - **Eerst AI-analyse**: elk nieuw item gaat eerst langs Gemini: nette naam (spelfouten verbeterd), aantal, merk of detail, afdeling, datum, en "melk en eieren" wordt twee items. De voorkeuren uit het geheugen gelden daarbij altijd. Zonder AI werkt toevoegen gewoon met de regels.
 - **Spraakmemo**: tik op de microfoon, spreek in wat er nodig is; Gemini schrijft het uit en verdeelt het over de lijsten.
 - **Geheugen**: algemene voorkeuren en afspraken van het huishouden, nooit losse producten ("Schoonmaakproducten moeten ecologisch zijn", "Klusspullen horen op de lijst Klussen"). Voeg ze zelf toe via *Geheugen* op het beginscherm of door `onthoud: …` te typen; uit keuzes en correcties leidt Gemini er zelf regels bij af. Elke AI-functie krijgt het geheugen mee. Gedeeld met het hele huishouden.
-- **Aanbiedingen** (boodschappenlijst): kies een plaats en Gemini zoekt met Google Search de folders van deze week bij supermarkten in de buurt. Aanbiedingen voor wat op de lijst staat komen bovenaan en kun je bij het item noteren.
+- **Aanbiedingen**: vul bij *Huishouden* jullie woonplaats in. Elke nacht zoekt Gemini met Google Search de folders van deze week bij supermarkten daar (`scripts/aanbiedingen.ts`, zie hieronder) en zet het resultaat op het huishouden. Op een boodschappenlijst toont de knop *Aanbiedingen* ze, met wat op de lijst staat bovenaan; items die in de aanbieding zijn krijgen een groen vlaggetje.
 - **Boodschappen per afdeling**, met aantallen (`2 pak melk`), recente items en *Ik ga boodschappen doen*.
 - **Taken met datums** in gewoon Nederlands (`morgen`, `vrijdag`, `12 nov`) en iemand die het doet.
 - **Taken uitwerken**: Gemini stelt eerst een paar meerkeuzevragen over de details (omvang, budget, wie helpt) en maakt daarna van de taak een toelichting, stappen, tips en een lijst met wat je moet kopen. Met één tik zet je die op de lijsten.
@@ -74,6 +74,10 @@ In de Firebase-console moeten **E-mail/wachtwoord** en **Google** aan staan onde
 Alle routes geven gestructureerde JSON terug (Gemini `responseSchema`), behalve `/offers`: zoeken met Google gaat niet samen met een schema, dus daar vraagt de prompt om JSON en geeft de route ook de bronnen en de zoeksuggestie van Google mee (die moet je tonen bij antwoorden met Google Search). De Gemini-sleutel blijft op de server.
 
 Deploy zoals Moestuin: via AI Studio of naar Cloud Run met `npm run build && npm start` en `GEMINI_API_KEY` als secret.
+
+## Aanbiedingen 's nachts
+
+`scripts/aanbiedingen.ts` zoekt per huishouden met een woonplaats de aanbiedingen van deze week (Gemini met Google Search via Firebase AI Logic, dezelfde prompt als de app) en schrijft ze naar `samenlijstHouseholds/{id}.offers`. Het script heeft de deploysleutel van het Firebase-project nodig en draait daarom via de brug in de privé-repo (branch `samenlijst-meldingen`, actie `aanbiedingen`); een geplande taak van Claude start die elke nacht. Lokaal: `GOOGLE_APPLICATION_CREDENTIALS=sa.json npm run aanbiedingen -- <projectId>`.
 
 ## Android-app
 

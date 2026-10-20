@@ -110,7 +110,7 @@ function stopData() {
 export function selectHousehold(hid: string | null) {
   stopData();
   try { localStorage.setItem('samenlijst.hid', hid || ''); } catch { /* private mode */ }
-  setS({ hid, lists: [], items: [], memory: [], oldKb: [], offers: null, listsLoaded: false, view: 'home', pending: [], receipt: [], sheet: null });
+  setS({ hid, lists: [], items: [], memory: [], oldKb: [], listsLoaded: false, view: 'home', pending: [], receipt: [], sheet: null });
   if (!hid) return;
   unsubData.push(onSnapshot(col('lists', hid), (snap) => {
     setS({ lists: snap.docs.map(d => ({ id: d.id, ...d.data() } as List)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)), listsLoaded: true });
@@ -193,9 +193,11 @@ export async function renameHousehold(h: Household, name: string) {
   await updateDoc(doc(db, HH, h.id), { name: name.slice(0, 60) });
 }
 
-/** The place the household shops (for supermarket offers); shared with everyone in the household. */
+/** Woonplaats of the household: every night Samenlijst looks up the supermarket offers there. */
 export async function setHouseholdPlace(h: Household, place: string) {
-  await updateDoc(doc(db, HH, h.id), { place: place.trim().slice(0, 80) });
+  const p = place.trim().replace(/\s+/g, ' ').slice(0, 80);
+  // A different place: last night's offers were for somewhere else.
+  await updateDoc(doc(db, HH, h.id), p === (h.place || '') ? { place: p } : { place: p, offers: null });
 }
 
 export async function leaveHousehold(h: Household) {

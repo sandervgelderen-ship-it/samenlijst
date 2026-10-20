@@ -1,6 +1,6 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
-import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines } from '../src/lib/domain';
+import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem } from '../src/lib/domain';
 import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules } from '../src/lib/aiClean';
 import type { Item, List } from '../src/types';
 
@@ -104,6 +104,13 @@ const offers = cleanOffers({ week: '20 t/m 26 oktober', stores: ['Jumbo'], offer
 ] });
 t('aanbiedingen: lijst eerst, dubbel en leeg weg', () => assert.deepEqual(offers.offers.map(o => [o.store, o.product, o.match, o.until]), [['Albert Heijn', 'Halfvolle melk', 'Melk', null], ['Jumbo', 'Chips', '', '2026-10-26']]));
 t('aanbiedingen: winkels en afdeling', () => assert.deepEqual([offers.stores, offers.offers[0].cat, offers.week], [['Jumbo', 'Albert Heijn'], 'zuivel', '20 t/m 26 oktober']));
+
+const shopping = [item({ text: 'Melk' }), item({ text: 'Halfvolle melk' }), item({ text: 'Toiletreiniger' }), item({ text: 'Kaas' })];
+t('aanbieding: Geminis match gaat voor', () => assert.equal(offerItem({ product: 'Campina Langlekker literpakken', match: 'melk' }, shopping)?.text, 'Melk'));
+t('aanbieding: woorden van het item in het product', () => assert.deepEqual(
+  ['AH Halfvolle melk 1 L', 'Ecover WC-reiniger', 'Ecover toiletreiniger 750 ml', 'Kaasstengels'].map(p => offerItem({ product: p, match: '' }, shopping)?.text ?? null),
+  ['Halfvolle melk', null, 'Toiletreiniger', null]));
+t('aanbieding: verlopen weg', () => assert.deepEqual(liveOffers([{ until: '2026-10-19' }, { until: '2026-10-20' }, { until: null }], '2026-10-20').length, 2));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');

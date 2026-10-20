@@ -3,7 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { Copy, MessageSquareWarning, Users } from 'lucide-react';
 import { logOut } from '../../auth';
 import { setApiUrl } from '../../api';
-import { createHousehold, joinHousehold, leaveHousehold, renameHousehold, renewInviteCode, selectHousehold } from '../../data/repo';
+import { createHousehold, joinHousehold, leaveHousehold, renameHousehold, renewInviteCode, selectHousehold, setHouseholdPlace } from '../../data/repo';
 import { toast } from '../../data/toast';
 import { useStore } from '../../store/useStore';
 import { Avatar, useHousehold, useNames } from '../bits';
@@ -20,6 +20,7 @@ export default function HouseholdSheet() {
   const aiOn = useStore(s => s.aiOn);
   const { full } = useNames();
   const [name, setName] = useState(h?.name || '');
+  const [place, setPlace] = useState(h?.place || '');
   const [code, setCode] = useState('');
   const [newName, setNewName] = useState('');
   const [server, setServer] = useState(apiUrl);
@@ -44,6 +45,12 @@ export default function HouseholdSheet() {
       <label>Naam
         <input className="field" id="hh-rename" value={name} maxLength={60} onChange={e => setName(e.target.value)}
           onBlur={() => name.trim() && name.trim() !== h.name && run(() => renameHousehold(h, name.trim()))} />
+      </label>
+      <label>Woonplaats
+        <input className="field" id="hh-place" value={place} maxLength={80} placeholder="Bijv. Castricum" autoComplete="address-level2"
+          onChange={e => setPlace(e.target.value)}
+          onBlur={() => place.trim() !== (h.place || '') && run(() => setHouseholdPlace(h, place), place.trim() ? 'Woonplaats bewaard. Vannacht zoekt Samenlijst de aanbiedingen.' : undefined)} />
+        <span className="note">Elke nacht zoekt Samenlijst de supermarktaanbiedingen in deze plaats.</span>
       </label>
 
       <div style={{ display: 'grid', gap: 8 }}>
