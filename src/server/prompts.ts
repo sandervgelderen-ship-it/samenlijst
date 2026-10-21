@@ -156,6 +156,30 @@ Per regel: "text" is één korte Nederlandse zin van minstens drie woorden, "top
 /** The JSON shape the offers prompt asks for (search grounding cannot use a response schema). */
 export const OFFERS_SHAPE = '{"week":"20 t/m 26 oktober","stores":["Albert Heijn","Jumbo"],"offers":[{"store":"Albert Heijn","product":"Halfvolle melk","deal":"2e halve prijs","price":"€1,19","until":"2026-10-26","match":"Melk","cat":"zuivel"}]}';
 
+export const PRICES_SHAPE = '{"prices":[{"i":0,"store":"Lidl","product":"Milbona halfvolle melk 1 L","price":"€1,09","deal":"","until":""}]}';
+
+/**
+ * What items cost now, found with Google Search: at the household's supermarkets, or for things from another
+ * kind of shop (bouwmarkt, dierenwinkel) at such shops in or near the place.
+ */
+export function pricesPrompt(b: any) {
+  const place = s(b.place, 80);
+  const stores = (Array.isArray(b.stores) ? b.stores : []).map((x: unknown) => s(x, 40)).filter(Boolean).slice(0, 12);
+  const items = (Array.isArray(b.items) ? b.items : []).slice(0, 40);
+  const lines = items.map((x: any, n: number) => `${n}: ${s(x.text, 100)}${x.qty ? ` (${s(x.qty, 24)})` : ''}${x.note ? ` – ${s(x.note, 80)}` : ''}${x.store ? ` [koop je bij: ${s(x.store, 30)}]` : ''}`).join('\n');
+  const where = stores.length
+    ? `bij ${stores.length === 1 ? 'deze supermarkt' : 'elk van deze supermarkten'}: ${stores.join(', ')} (in of bij ${place}). Zoek op de eigen site van ${stores.length === 1 ? 'de keten' : 'elke keten'}.`
+    : `bij winkels van de soort tussen [ ] in of bij ${place} (bijv. de bouwmarkten, dierenwinkels of drogisterijen daar), hooguit 3 winkels per product.`;
+  return `Zoek met Google Search wat deze producten nu kosten ${where} Vandaag is het ${s(b.today, 60)}.
+Producten (nummer: product):
+${lines}
+Voorkeuren van dit huishouden (houd er rekening mee, bijv. bij merk of soort):
+${memory(b.memory)}
+
+Neem per product en winkel de gangbare, voordeligste variant die past (huismerk mag), tenzij het product een merk, soort of hoeveelheid noemt. Is er deze week een aanbieding voor, gebruik dan de actieprijs en zet de actie in "deal" en de laatste geldige dag in "until" (JJJJ-MM-DD). Gebruik alleen prijzen die je echt gevonden hebt; vind je een prijs niet, laat die winkel bij dat product weg. Verzin niets.
+Per prijs: "i" (nummer van het product), "store" (naam van de winkel), "product" (wat je vond, met hoeveelheid), "price" (zoals "€1,09" of "2 voor €3,49"), "deal" (of een lege string), "until" (of een lege string).`;
+}
+
 /** Supermarket offers near a place, found with Google Search (grounding). */
 export function offersPrompt(b: any) {
   const place = s(b.place, 80);

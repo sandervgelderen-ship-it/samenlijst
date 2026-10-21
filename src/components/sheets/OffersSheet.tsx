@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { BadgePercent, Check, Plus, Search, Store as StoreIcon, StickyNote } from 'lucide-react';
+import { BadgePercent, Check, Plus, RefreshCw, Search, Store as StoreIcon, StickyNote } from 'lucide-react';
 import { CHAINS, dueInfo, liveOffers, offerItem, todayISO } from '../../lib/domain';
-import { addItem, findOffers, listItems, updateItem } from '../../data/actions';
+import { addItem, findOffers, listItems, lookupPrices, updateItem } from '../../data/actions';
 import { setS, useStore } from '../../store/useStore';
 import type { Offer } from '../../types';
 import { useHousehold } from '../bits';
@@ -30,6 +30,7 @@ export default function OffersSheet({ listId }: { listId: string }) {
   const household = useHousehold();
   const busy = useStore(s => s.offersBusy);
   const busyAt = useStore(s => s.offersBusyAt);
+  const pricesBusy = useStore(s => s.pricesBusy);
   const readOnly = useStore(s => s.readOnly);
   const aiOn = useStore(s => s.aiOn);
   useStore(s => s.items); // re-render when items change (added / noted)
@@ -117,6 +118,13 @@ export default function OffersSheet({ listId }: { listId: string }) {
             <iframe className="offer-search" title="Zoeksuggesties van Google" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={result.searchHtml} />
           )}
         </>
+      )}
+      {result && aiOn && !readOnly && !busy && (
+        <div className="pacts">
+          <button type="button" className="chip ai" disabled={pricesBusy} onClick={() => void (async () => { await findOffers(); await lookupPrices(); })()}>
+            <RefreshCw size={14} /> {pricesBusy ? 'Prijzen zoeken…' : 'Vernieuwen: aanbiedingen en prijzen'}
+          </button>
+        </div>
       )}
       {busy && <div className="thinking"><span className="dots" aria-hidden="true" />Gemini bladert door de folders{busyAt ? <> van {busyAt}</> : <> van {place}</>}…</div>}
       <div className="actions"><span /><button type="button" className="btn ghost" onClick={closeSheet}>Sluiten</button></div>

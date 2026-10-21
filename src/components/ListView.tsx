@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { BadgePercent, Check, ChevronRight, Plus, Repeat2, ShoppingCart, Sparkles, Store } from 'lucide-react';
-import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem, repeatLabel } from '../lib/domain';
-import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
+import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem, repeatLabel, cheapest, euro, splitByStore } from '../lib/domain';
+import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem, priceStores } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
 import type { CatId, Item, List, PlanQuestions } from '../types';
 import { Avatar, Doodle, useHousehold, useNames } from './bits';
@@ -29,6 +29,8 @@ export default function ListView({ list: l }: { list: List }) {
   if (l.kind === 'todo' && onlyMine) open = open.filter(i => i.assignee === me);
   const shopper = l.shopper && l.shopper.by && Date.now() - l.shopper.at < SHOPPING_FOR ? l.shopper : null;
   const urgentFirst = (a: Item, b: Item) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0);
+  // On a trip to chosen supermarkets the list is split per shop, each item where it is cheapest.
+  const trip = l.kind === 'shop' && shopper && shopper.by === me && shopper.stores?.length ? shopper.stores : null;
 
   return (
     <>
@@ -36,7 +38,7 @@ export default function ListView({ list: l }: { list: List }) {
       {l.kind === 'shop' && shopper && (
         <div className="banner warn">
           <Avatar uid={shopper.by} />
-          <span>{shopper.by === me ? 'Jij doet' : `${first(shopper.by)} doet`} nu boodschappen. Voeg snel toe wat nog mist.</span>
+          <span>{shopper.by === me ? 'Jij doet' : `${first(shopper.by)} doet`} nu boodschappen{shopper.stores?.length ? ` bij ${shopper.stores.join(' en ')}` : ''}. Voeg snel toe wat nog mist.</span>
           {shopper.by === me && <button onClick={() => setShopper(l.id, false)}>Klaar</button>}
         </div>
       )}
@@ -50,7 +52,7 @@ export default function ListView({ list: l }: { list: List }) {
 
       <div className="toolbar">
         {l.kind === 'shop' && !readOnly && !(shopper && shopper.by === me) && (
-          <button className="chip" onClick={() => setShopper(l.id, true)}><ShoppingCart size={15} /> Ik ga boodschappen doen</button>
+          <button className="chip" onClick={() => (priceStores().length ? setS({ sheet: { kind: 'shopping', listId: l.id } }) : setShopper(l.id, true))}><ShoppingCart size={15} /> Ik ga boodschappen doen</button>
         )}
         {l.kind === 'todo' && <button className="chip" aria-pressed={onlyMine} onClick={() => setS({ onlyMine: !onlyMine })}>Alleen voor mij</button>}
         {aiOn && !readOnly && l.kind === 'shop' && open.length >= 2 && (
@@ -86,6 +88,24 @@ export default function ListView({ list: l }: { list: List }) {
             ? <>Typ hieronder wat er op moet. Begin met een aantal, zoals <em>2 pak melk</em>; het komt vanzelf bij de juiste afdeling.</>
             : <>Typ hieronder een taak, met een datum als je wilt: <em>kozijnen verven vrijdag</em>. Gemini werkt hem voor je uit.</>}
         </div>
+      ) : l.kind === 'shop' && trip ? (
+        <>
+          {splitByStore(open, trip).map(([store, g]) => {
+            const isTrip = trip.includes(store);
+            const sum = isTrip ? g.reduce((t, i) => t + (cheapest(i.prices, [store])?.amount || 0), 0) : 0;
+            return (
+              <section className="group" key={'t-' + store}>
+                <h2>
+                  <span className="aisle"><Store size={15} style={{ color: 'var(--c-druif-fg)' }} />{isTrip ? store : `Bij de ${store.toLowerCase()}`}</span>
+                  <span>{sum > 0 && <>ca. {euro(sum)} · </>}{g.length}</span>
+                </h2>
+                <div className="items">{g.sort((a, b) => urgentFirst(a, b) || CAT_ORDER[(a.cat || 'overig') as CatId] - CAT_ORDER[(b.cat || 'overig') as CatId] || a.createdAt - b.createdAt)
+                  .map(i => <ItemRow key={i.id} item={i} kind="shop" at={isTrip ? [store] : undefined} />)}</div>
+              </section>
+            );
+          })}
+          {!open.length && <div className="empty"><Doodle kind="done" /><strong>Alles in het mandje</strong>Wis de afgevinkte items als je klaar bent; ze blijven als suggestie bewaard.</div>}
+        </>
       ) : l.kind === 'shop' ? (
         <>
           {groupByAisle(open.filter(i => isSuper(i.store))).map(([c, g]) => (
@@ -159,7 +179,7 @@ function groupByAisle(items: Item[]): [CatId, Item[]][] {
 
 const o2s = (o: { deal: string; price: string; store: string; product: string }) => `${o.product}: ${o.deal}${o.price ? ' ' + o.price : ''} bij ${o.store}`;
 
-function ItemRow({ item: i, kind }: { item: Item; kind: 'shop' | 'todo' }) {
+function ItemRow({ item: i, kind, at }: { item: Item; kind: 'shop' | 'todo'; at?: string[] }) {
   const readOnly = useStore(s => s.readOnly);
   const popId = useStore(s => s.popId);
   const flashId = useStore(s => s.flashId);
@@ -184,7 +204,10 @@ function ItemRow({ item: i, kind }: { item: Item; kind: 'shop' | 'todo' }) {
   const subs: ReactNode[] = [];
   if (i.note) subs.push(<span key="n">{i.note}</span>);
   if (i.urgent && !i.done) subs.push(<span key="u" className="flag">Dringend</span>);
-  if (offer) subs.push(<span key="o" className="flag offer-flag" title={`${o2s(offer)}`}>% {offer.deal || 'Aanbieding'} · {offer.store}</span>);
+  // What it costs, and where cheapest (on a trip: at this shop).
+  const best = kind === 'shop' && !i.done ? cheapest(i.prices, at) : null;
+  if (best) subs.push(<span key="p" className={`flag ${best.deal ? 'offer-flag' : 'price-flag'}`} title={`${best.product} · ${best.price}${best.deal ? ` (${best.deal})` : ''}`}>{best.deal ? '% ' : ''}{best.price}{best.deal ? ` ${best.deal}` : ''}{at ? '' : ` · ${best.store}`}</span>);
+  if (offer && !best) subs.push(<span key="o" className="flag offer-flag" title={`${o2s(offer)}`}>% {offer.deal || 'Aanbieding'} · {offer.store}</span>);
   if (kind === 'todo' && i.due && !i.done) { const d = dueInfo(i.due); subs.push(<span key="d" className={`flag ${d.late ? 'late' : d.soon ? '' : 'calm'}`}>{d.label}</span>); }
   if (kind === 'todo' && i.repeat) subs.push(<span key="r" className="flag calm"><Repeat2 size={12} style={{ verticalAlign: -2, marginRight: 3 }} />{repeatLabel(i.repeat)}</span>);
   if (i.done && i.doneBy) subs.push(<span key="b">{first(i.doneBy)}{kind === 'shop' ? ' heeft het' : ' deed dit'}</span>);

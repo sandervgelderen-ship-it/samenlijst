@@ -29,6 +29,8 @@ export interface Household {
 export interface Shopper {
   by: string;
   at: number;
+  /** The supermarkets this trip goes to; the list is then grouped per shop by where things are cheapest. */
+  stores?: string[];
 }
 
 export interface List {
@@ -86,6 +88,23 @@ export interface Item {
   repeat?: Repeat | null;
   /** The next occurrence made when this one was ticked off (removed again if it is unticked). */
   nextId?: string | null;
+  /** What it costs at the household's supermarkets (or other shops), looked up with Google; cheapest wins. */
+  prices?: ItemPrice[] | null;
+  pricesAt?: number | null;
+}
+
+/** One price for an item at one shop, as found online. */
+export interface ItemPrice {
+  store: string;
+  /** The product that was priced ("AH Halfvolle melk 1 L"). */
+  product: string;
+  /** As shown: "€1,09", "2 voor €3,49". */
+  price: string;
+  /** Per piece in euros, for comparing; null when unknown. */
+  amount: number | null;
+  /** The offer, if this price is one ("1+1 gratis"). */
+  deal: string;
+  until: string | null;
 }
 
 /**

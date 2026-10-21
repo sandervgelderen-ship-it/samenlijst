@@ -1,6 +1,6 @@
 /** Turn whatever the AI server returned into safe, bounded data the app can store. */
-import type { CatId, Item, Offer, Plan, PlanAnswer, PlanQuestion } from '../types';
-import { cap, guessCat, isCat, isRule, kbKey } from './domain';
+import type { CatId, Item, ItemPrice, Offer, Plan, PlanAnswer, PlanQuestion } from '../types';
+import { cap, guessCat, isCat, isRule, kbKey, parseEuro, sameStore } from './domain';
 
 const str = (v: unknown, n: number) => String(v == null ? '' : v).trim().slice(0, n);
 const arr = (d: unknown): unknown[] => {
@@ -182,5 +182,25 @@ export function groundingSources(meta: unknown): { title: string; uri: string }[
     out.push({ title: String(c?.web?.title || c?.web?.domain || uri).slice(0, 80), uri });
     if (out.length >= 8) break;
   }
+  return out;
+}
+
+/** Prices per item (by index) from a grounded answer: one per shop, the lowest when a shop appears twice. */
+export function cleanPrices(data: unknown, count: number): Record<number, ItemPrice[]> {
+  const o = (data && typeof data === 'object' && !Array.isArray(data) ? data : {}) as Record<string, unknown>;
+  const rows = Array.isArray(data) ? data : arr(o.prices);
+  const out: Record<number, ItemPrice[]> = {};
+  for (const raw of rows) {
+    const r = obj(raw); if (!r) continue;
+    const i = Number(r.i); if (!Number.isInteger(i) || i < 0 || i >= count) continue;
+    const store = cap(str(r.store, 40)), price = str(r.price, 30);
+    const amount = parseEuro(price);
+    if (!store || !price || amount == null || amount <= 0 || amount > 1000) continue;
+    const p: ItemPrice = { store, product: str(r.product, 100), price, amount, deal: str(r.deal, 60), until: isoDate(r.until) };
+    const list = (out[i] ||= []);
+    const same = list.findIndex(x => sameStore(x.store, store));
+    if (same < 0) list.push(p); else if (amount < list[same].amount!) list[same] = p;
+  }
+  for (const k of Object.keys(out)) out[+k].sort((a, b) => a.amount! - b.amount!);
   return out;
 }

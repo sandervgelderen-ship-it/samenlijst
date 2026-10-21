@@ -7,7 +7,7 @@
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { app } from '../firebase';
 import {
-  analyzePrompt, elaboratePrompt, forgotPrompt, learnPrompt, OFFERS_SHAPE, offersPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+  analyzePrompt, elaboratePrompt, forgotPrompt, learnPrompt, OFFERS_SHAPE, offersPrompt, PRICES_SHAPE, pricesPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
 } from '../server/prompts';
 import { groundingSources, parseLoose } from '../lib/aiClean';
 
@@ -74,6 +74,7 @@ export async function runLocal(path: string, body: any): Promise<unknown> {
     case 'route-items': prompt = routePrompt(body); break;
     case 'learn': prompt = learnPrompt(body); break;
     case 'offers': return offers(body);
+    case 'prices': return prices(body);
     case 'smart-add':
       attachment = media(body?.image, 'image');
       prompt = smartAddPrompt(body, !!attachment);
@@ -103,4 +104,12 @@ async function offers(body: any) {
   const data = parseLoose(result.response.text());
   const o = data && typeof data === 'object' && !Array.isArray(data) ? data : { offers: data };
   return { ...o, _sources: sources, _searchHtml: meta?.searchEntryPoint?.renderedContent || '' };
+}
+
+/** Prices of items at the household's shops, via Google Search grounding. */
+async function prices(body: any) {
+  if (!String(body?.place || '').trim()) throw new Error('Kies eerst een plaats.');
+  const text = `${pricesPrompt(body)}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet bekend is):\n${PRICES_SHAPE}`;
+  const result = await generate([text], true);
+  return parseLoose(result.response.text());
 }

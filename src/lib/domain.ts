@@ -4,7 +4,7 @@
  * and the household memory (general preferences, never single items).
  * No Firebase, no React: tested in scripts/test-domain.ts.
  */
-import type { CatId, ColorName, Entry, Item, List, Memory, Offer, RouteWhy } from '../types';
+import type { CatId, ColorName, Entry, Item, ItemPrice, List, Memory, Offer, RouteWhy } from '../types';
 
 /* ---------- Aisles ---------- */
 export const CATS: [CatId, string, string][] = [
@@ -368,10 +368,18 @@ export function liveOffers<T extends Pick<Offer, 'until'>>(offers: T[] | undefin
  */
 export function offerItem<T extends Pick<Item, 'text'>>(o: Pick<Offer, 'product' | 'match'>, items: T[]): T | undefined {
   const mk = kbKey(o.match || '');
-  if (mk) { const hit = items.find(i => kbKey(i.text) === mk); if (hit) return hit; }
   const pw = kbKey(o.product).split(/[\s-]+/).filter(w => w.length >= 4);
-  // A word of the item is in the product as a word, or (5+ letters) as part of one: "toiletreiniger" in "wc-toiletreiniger".
-  const has = (w: string) => pw.some(p => p === w || (w.length >= 5 && (p.startsWith(w) || p.endsWith(w))));
+  // A word of the item is in the product as a word, or (5+ letters) at the end of a compound: "toiletreiniger" in
+  // "wc-toiletreiniger". Not at the start: in Dutch the last part says what it is, so "Appelsientje" is no "Appels".
+  const forms = (w: string) => { const stem = w.length >= 5 && w.endsWith('s') ? w.slice(0, -1) : w; return [w, stem, w + 's', w + 'en', stem + 'en']; };
+  const has = (w: string) => pw.some(p => forms(w).includes(p) || (w.length >= 5 && p.endsWith(w)));
+  // Gemini's match goes first ("Langlekker literpakken" is melk), unless the product only starts like the item:
+  // "Appelsientje" is no "Appels".
+  if (mk) {
+    const hit = items.find(i => kbKey(i.text) === mk);
+    const lookalike = (w: string) => pw.some(p => p !== w && p.startsWith(w.length >= 5 && w.endsWith('s') ? w.slice(0, -1) : w) && !forms(w).includes(p));
+    if (hit && !kbKey(hit.text).split(/[\s-]+/).filter(w => w.length >= 4).some(w => lookalike(w) && !has(w))) return hit;
+  }
   let best: T | undefined, bestLen = 0;
   for (const i of items) {
     const iw = kbKey(i.text).split(/[\s-]+/).filter(w => w.length >= 4);
@@ -379,6 +387,52 @@ export function offerItem<T extends Pick<Item, 'text'>>(o: Pick<Offer, 'product'
     if (iw.length > bestLen && iw.every(has)) { best = i; bestLen = iw.length; }
   }
   return best;
+}
+
+/* ---------- Prices: what an item costs where ---------- */
+/** "€1,09" → 1.09; "2 voor €3,49" → 1.745 (per piece); "€ 0.99 per kilo" → 0.99. Null when there is no amount. */
+export function parseEuro(s: unknown): number | null {
+  const t = String(s ?? '').replace(/\s+/g, ' ').toLowerCase();
+  const m = t.match(/(\d+)[.,](\d{2})(?!\d)/) || t.match(/€\s?(\d+)(?![.,\d])/);
+  if (!m) return null;
+  let v = m[2] !== undefined ? +m[1] + +m[2] / 100 : +m[1];
+  const per = t.match(/^(\d+)\s*(?:voor|x)\s/);
+  if (per && +per[1] > 1) v = v / +per[1];
+  return Math.round(v * 1000) / 1000;
+}
+export const euro = (v: number) => '€' + v.toFixed(2).replace('.', ',');
+
+const CHAIN_ALIAS: Record<string, string> = { ah: 'albert heijn', 'ah to go': 'albert heijn', deka: 'dekamarkt', 'deka markt': 'dekamarkt', 'plus supermarkt': 'plus', 'jumbo supermarkten': 'jumbo', 'vomar voordeelmarkt': 'vomar', 'aldi nord': 'aldi' };
+/** One key per chain, so "AH" and "Albert Heijn" are the same shop. */
+export const chainKey = (s: string) => { const k = norm(s).replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); return CHAIN_ALIAS[k] || k; };
+export const sameStore = (a: string, b: string) => chainKey(a) === chainKey(b);
+
+/** The cheapest known price for an item, optionally only at the shops someone is going to. */
+export function cheapest(prices: ItemPrice[] | null | undefined, stores?: string[]): ItemPrice | null {
+  let best: ItemPrice | null = null;
+  for (const p of prices || []) {
+    if (p.amount == null) continue;
+    if (stores && stores.length && !stores.some(s => sameStore(s, p.store))) continue;
+    if (!best || p.amount < best.amount!) best = p;
+  }
+  return best;
+}
+
+/**
+ * Shopping at a few supermarkets: per item the shop where it is cheapest (of those), so the list can be walked
+ * shop by shop. Items without a known price go to the first shop; items for another kind of shop keep their own.
+ */
+export function splitByStore<T extends { prices?: ItemPrice[] | null; store?: string | null }>(items: T[], stores: string[]): [string, T[]][] {
+  const groups = new Map<string, T[]>();
+  stores.forEach(s => groups.set(s, []));
+  const extra = new Map<string, T[]>();
+  for (const i of items) {
+    if (!isSuper(i.store)) { const k = normStore(i.store) || 'Overig'; extra.set(k, [...(extra.get(k) || []), i]); continue; }
+    const c = cheapest(i.prices, stores);
+    const target = c ? stores.find(s => sameStore(s, c.store))! : stores[0];
+    groups.get(target)!.push(i);
+  }
+  return [...[...groups.entries()].filter(([, g]) => g.length), ...extra.entries()];
 }
 
 /* ---------- Look ---------- */

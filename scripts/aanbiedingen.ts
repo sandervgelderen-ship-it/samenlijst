@@ -16,10 +16,10 @@ import { applicationDefault, initializeApp as initAdmin } from 'firebase-admin/a
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
-import { cleanOffers, groundingSources, mergeOffers, parseLoose } from '../src/lib/aiClean';
-import { memoryLines, todayLong } from '../src/lib/domain';
-import { OFFERS_SHAPE, offersPrompt } from '../src/server/prompts';
-import type { List, Memory, OfferResult } from '../src/types';
+import { cleanOffers, cleanPrices, groundingSources, mergeOffers, parseLoose } from '../src/lib/aiClean';
+import { isSuper, memoryLines, sameStore, todayLong } from '../src/lib/domain';
+import { OFFERS_SHAPE, offersPrompt, PRICES_SHAPE, pricesPrompt } from '../src/server/prompts';
+import type { ItemPrice, List, Memory, OfferResult } from '../src/types';
 
 const [projectId, outDir = 'uit'] = process.argv.slice(2);
 if (!projectId) throw new Error('Geef het project-id mee');
@@ -106,6 +106,33 @@ for (const h of households.docs) {
       say(`${h.id} (${place}): ${c.offers.length} aanbiedingen bij ${c.stores.join(', ') || '?'}, ${forList} voor de lijst${c.week ? ` (${c.week})` : ''}`);
       done++;
     }
+
+    // Prices of what is on the shopping lists: per supermarket, and other shops (bouwmarkt…) together.
+    const shopItems = itemsSnap.docs.filter(d => shop.has(d.get('listId'))).slice(0, 40);
+    const priceStores = (chosen.length ? chosen : c.stores).slice(0, 12);
+    const supers = shopItems.filter(d => isSuper(d.get('store'))), others = shopItems.filter(d => !isSuper(d.get('store')));
+    const found = new Map<string, ItemPrice[]>();
+    const jobs: [typeof shopItems, string[]][] = [...priceStores.map(st => [supers, [st]] as [typeof shopItems, string[]]), [others, []]];
+    for (const [batch, at] of jobs) {
+      if (!batch.length) continue;
+      try {
+        const prompt = `${pricesPrompt({ place, stores: at, memory, today: todayLong(), items: batch.map(d => ({ text: d.get('text'), qty: d.get('qty'), note: d.get('note'), store: isSuper(d.get('store')) ? '' : d.get('store') })) })}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet bekend is):\n${PRICES_SHAPE}`;
+        const res = await search(prompt);
+        const got = cleanPrices(parseLoose(res.response.text()), batch.length);
+        batch.forEach((d, n) => { if (got[n]?.length) found.set(d.id, [...(found.get(d.id) || []), ...got[n]]); });
+        say(`  prijzen ${at[0] || 'andere winkels'}: ${Object.keys(got).length} van ${batch.length}`);
+      } catch (e) {
+        say(`  prijzen ${at[0] || 'andere winkels'}: mislukt: ${String((e as Error)?.message || e).slice(0, 200)}`);
+      }
+      await pause(1500);
+    }
+    for (const d of shopItems) {
+      const got = found.get(d.id); if (!got) continue;
+      const old = (Array.isArray(d.get('prices')) ? d.get('prices') : []) as ItemPrice[];
+      const prices = [...got, ...old.filter(p => !got.some(g => sameStore(g.store, p.store)))].sort((a, b) => (a.amount ?? 1e9) - (b.amount ?? 1e9)).slice(0, 12);
+      await d.ref.update({ prices, pricesAt: Date.now() });
+    }
+    if (shopItems.length) say(`  prijzen bijgewerkt voor ${found.size} van ${shopItems.length} items`);
   } catch (e) {
     say(`${h.id} (${place}): mislukt: ${String((e as Error)?.message || e).slice(0, 300)}`);
     failed++;

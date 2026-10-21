@@ -14,6 +14,7 @@ export type Sheet =
   | { kind: 'smart'; mode: 'add' | 'forgot'; listId: string }
   | { kind: 'kb' }
   | { kind: 'offers'; listId: string }
+  | { kind: 'shopping'; listId: string }
   | { kind: 'household' };
 
 export interface QaSel {
@@ -81,6 +82,7 @@ interface State {
   heard: string | null;
   /** Looking up supermarket offers right now (on request; normally it happens at night). */
   offersBusy: boolean;
+  pricesBusy: boolean;
   /** The supermarket being searched right now. */
   offersBusyAt: string | null;
 
@@ -129,6 +131,7 @@ export const useStore = create<State>()((set) => ({
   analyzing: [],
   heard: null,
   offersBusy: false,
+  pricesBusy: false,
   offersBusyAt: null,
 
   set: (patch) => set(patch as any),

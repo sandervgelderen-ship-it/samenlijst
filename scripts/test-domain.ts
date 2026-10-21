@@ -1,6 +1,6 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
-import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem, parseRepeat, nextDue, repeatLabel } from '../src/lib/domain';
+import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem, parseRepeat, nextDue, repeatLabel, parseEuro, cheapest, splitByStore, sameStore } from '../src/lib/domain';
 import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules, mergeOffers } from '../src/lib/aiClean';
 import type { Item, List } from '../src/types';
 
@@ -120,6 +120,17 @@ t('herhalen: elke maandag geeft de eerste maandag', () => assert.deepEqual(parse
 t('herhalen: maandelijks, en gewone tekst niet', () => assert.deepEqual([parseRepeat('Huur overmaken maandelijks', tue).repeat, parseRepeat('Weekboodschappen doen', tue).repeat], [{ unit: 'month', n: 1 }, null]));
 t('herhalen: volgende datum', () => assert.deepEqual([nextDue('2026-10-20', { unit: 'week', n: 1 }), nextDue('2026-01-31', { unit: 'month', n: 1 }), nextDue('2026-10-20', { unit: 'day', n: 3 })], ['2026-10-27', '2026-02-28', '2026-10-23']));
 t('herhalen: label', () => assert.deepEqual([repeatLabel({ unit: 'week', n: 1 }), repeatLabel({ unit: 'week', n: 2 })], ['Elke week', 'Elke 2 weken']));
+
+// Prijzen
+t('prijs: euro lezen', () => assert.deepEqual(['€1,09', '2 voor €3,49', '€ 0.99 per kilo', '€3', 'gratis'].map(parseEuro), [1.09, 1.745, 0.99, 3, null]));
+t('prijs: AH is Albert Heijn', () => assert.equal(sameStore('AH', 'Albert Heijn'), true));
+const pr = (store: string, price: string) => ({ store, product: 'x', price, amount: parseEuro(price), deal: '', until: null });
+const melk = { prices: [pr('Albert Heijn', '€1,19'), pr('Lidl', '€0,99'), pr('Vomar', '€1,05')], store: null };
+t('prijs: goedkoopste, ook binnen gekozen winkels', () => assert.deepEqual([cheapest(melk.prices)!.store, cheapest(melk.prices, ['AH', 'Vomar'])!.store], ['Lidl', 'Vomar']));
+const split = splitByStore([melk, { prices: [pr('AH', '€2,00')], store: null }, { prices: null, store: null }, { prices: null, store: 'Dierenwinkel' }], ['Albert Heijn', 'Vomar']);
+t('prijs: per winkel groeperen', () => assert.deepEqual(split.map(([s, g]) => [s, g.length]), [['Albert Heijn', 2], ['Vomar', 1], ['Dierenwinkel', 1]]));
+t('aanbieding: Appelsientje is geen appels', () => assert.equal(offerItem({ product: 'Appelsientje sinaasappelsap', match: 'Appels' }, [{ text: 'Appels' }]), undefined));
+t('aanbieding: Elstar appels wel', () => assert.equal(offerItem({ product: 'Elstar appelen 1 kg', match: '' }, [{ text: 'Appels' }])?.text, 'Appels'));
 
 // Aanbiedingen per gekozen supermarkt
 const offA = cleanOffers({ week: '19 t/m 25 oktober', offers: [{ store: 'Vomar', product: 'Melk', deal: '1+1', match: 'Melk' }, { store: 'Vomar', product: 'Kaas', deal: '2e halve prijs' }] });

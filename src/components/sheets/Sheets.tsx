@@ -4,6 +4,7 @@ import ItemSheet from './ItemSheet';
 import ListSheet from './ListSheet';
 import SmartSheet from './SmartSheet';
 import MemorySheet from './MemorySheet';
+import ShoppingSheet from './ShoppingSheet';
 import OffersSheet from './OffersSheet';
 import HouseholdSheet from './HouseholdSheet';
 
@@ -34,6 +35,7 @@ export default function Sheets() {
     case 'smart': return <SmartSheet key={sheet.mode + sheet.listId} mode={sheet.mode} listId={sheet.listId} />;
     case 'kb': return <MemorySheet />;
     case 'offers': return <OffersSheet key={sheet.listId} listId={sheet.listId} />;
+    case 'shopping': return <ShoppingSheet key={sheet.listId} listId={sheet.listId} />;
     case 'household': return <HouseholdSheet />;
   }
 }

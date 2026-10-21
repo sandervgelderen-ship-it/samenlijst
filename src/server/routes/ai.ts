@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { aiConfigured, generateGrounded, generateJSON } from '../services/genai';
 import {
-  analyzePrompt, elaboratePrompt, questionsPrompt, forgotPrompt, learnPrompt, offersPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
-  ANALYZE_SCHEMA, LEARN_SCHEMA, PLAN_SCHEMA, QUESTIONS_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
+  analyzePrompt, elaboratePrompt, questionsPrompt, forgotPrompt, learnPrompt, offersPrompt, pricesPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+  PRICES_SHAPE, ANALYZE_SCHEMA, LEARN_SCHEMA, PLAN_SCHEMA, QUESTIONS_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
 } from '../prompts';
 
 export const aiRouter = Router();
@@ -66,6 +66,14 @@ aiRouter.post('/voice-memo', asyncHandler(async (req, res) => {
 /** Geheugen: turn a correction or choice into a general rule (or nothing). */
 aiRouter.post('/learn', asyncHandler(async (req, res) => {
   res.json(await generateJSON(learnPrompt(req.body || {}), LEARN_SCHEMA));
+}));
+
+/** Prijzen: what items cost at the household's shops, via Google Search grounding. */
+aiRouter.post('/prices', asyncHandler(async (req, res) => {
+  const b = req.body || {};
+  if (!String(b.place || '').trim()) { res.status(400).json({ error: 'Kies eerst een plaats.' }); return; }
+  const { data } = await generateGrounded(`${pricesPrompt(b)}\n\nAntwoord met alleen JSON in precies deze vorm:\n${PRICES_SHAPE}`);
+  res.json(data && typeof data === 'object' && !Array.isArray(data) ? data : { prices: data });
 }));
 
 /** Aanbiedingen: current supermarket offers near a place, via Google Search grounding. */

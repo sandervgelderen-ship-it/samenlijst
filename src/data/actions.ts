@@ -4,12 +4,12 @@
  */
 import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { post } from '../api';
-import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, mergeOffers, cleanQuestions, cleanRules, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
+import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, cleanPrices, mergeOffers, cleanQuestions, cleanRules, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
 import {
-  CAT_LABEL, catFor, colorOf, COLORS, decideStore, dueInfo, isSuper, kbKey, knownStore, makeMemory, memoryLines, nextDue, normStore, parseDue, parseEntry, parseRepeat, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS, type Repeat,
+  CAT_LABEL, catFor, colorOf, COLORS, decideStore, dueInfo, isSuper, kbKey, sameStore, knownStore, makeMemory, memoryLines, nextDue, normStore, parseDue, parseEntry, parseRepeat, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS, type Repeat,
 } from '../lib/domain';
 import { S, setS } from '../store/useStore';
-import type { CatId, Entry, Item, List, ListKind, Memory, OfferResult, PlanAnswer, Pending, Receipt, RouteWhy, StoreAsk } from '../types';
+import type { CatId, Entry, Item, ItemPrice, List, ListKind, Memory, OfferResult, PlanAnswer, Pending, Receipt, RouteWhy, StoreAsk } from '../types';
 import { hRef, itemRef, kbRef, listRef, newId, safeWrite } from './repo';
 import { toast } from './toast';
 import { confetti } from '../lib/confetti';
@@ -132,6 +132,7 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
   if (repeat) body.repeat = repeat;
   write(() => setDoc(itemRef(id), body));
   if (where.ask) askStore(id, listId, text, where.guess);
+  if (list.kind === 'shop') queuePrices(id);
   if (list.kind === 'todo' && list.autoPlan !== false && S().aiOn) queuePlan(id, false, body.text);
   return { id, status: 'new' };
 }
@@ -258,6 +259,7 @@ export function addMany(listId: string, entries: Pick<Suggestion, 'text' | 'qty'
       addedBy: me(), createdAt: t0 + n,
     };
     write(() => setDoc(itemRef(id), body)); created.push(id);
+    if (list.kind === 'shop') queuePrices(id);
   });
   const n = created.length + revived;
   if (!n) { toast('Alles stond al op de lijst'); return; }
@@ -645,4 +647,70 @@ export async function findOffers() {
   } finally {
     setS({ offersBusy: false, offersBusyAt: null });
   }
+}
+
+/* ---------- Prijzen: what each grocery costs at the household's shops ----------
+ * Gemini looks the prices up with Google: for supermarket items at the chosen supermarkets, for other items
+ * (bouwmarkt, dierenwinkel) at such shops in the woonplaats. Every night for the whole list (scripts/aanbiedingen.ts),
+ * a few seconds after something new is added, or on request (Aanbiedingen › Vernieuwen). */
+export function priceStores(h = S().households.find(x => x.id === S().hid)): string[] {
+  return (h?.supermarkets?.length ? h.supermarkets : h?.offers?.stores || []).filter(Boolean).slice(0, 12);
+}
+
+export async function lookupPrices(ids?: string[], opts: { quiet?: boolean } = {}) {
+  const h = S().households.find(x => x.id === S().hid);
+  const place = (h?.place || '').trim();
+  if (!h || !place || !S().aiOn || S().readOnly) { if (!opts.quiet) toast('Vul eerst jullie woonplaats in bij Huishouden.'); return; }
+  const shop = new Set(S().lists.filter(l => l.kind === 'shop').map(l => l.id));
+  const items = S().items.filter(i => !i.done && shop.has(i.listId) && (!ids || ids.includes(i.id))).slice(0, 40);
+  if (!items.length) return;
+  const stores = priceStores(h);
+  const supers = items.filter(i => isSuper(i.store)), others = items.filter(i => !isSuper(i.store));
+  const found = new Map<string, ItemPrice[]>();
+  const ask = async (batch: Item[], at: string[]) => {
+    if (!batch.length) return;
+    const raw = await post('prices', {
+      place, stores: at, memory: memoryForAi(), today: todayLong(),
+      items: batch.map(i => ({ text: i.text, qty: i.qty, note: i.note, store: isSuper(i.store) ? '' : i.store })),
+    });
+    const c = cleanPrices(raw, batch.length);
+    batch.forEach((i, n) => { if (c[n]?.length) found.set(i.id, [...(found.get(i.id) || []), ...c[n]]); });
+  };
+  setS({ pricesBusy: true });
+  let failed = 0;
+  try {
+    // A few items: one search for all shops. A whole list: one search per supermarket, so none is skipped.
+    const jobs: [Item[], string[]][] = stores.length ? (supers.length <= 6 ? [[supers, stores]] : stores.map(st => [supers, [st]])) : [];
+    jobs.push([others, []]);
+    for (const [batch, at] of jobs) { try { await ask(batch, at); } catch (e) { console.warn('Prijzen', e); failed++; } }
+    const now = Date.now();
+    for (const i of items) {
+      const got = found.get(i.id);
+      if (!got) continue;
+      // Keep earlier prices from shops this round did not ask (or did not find), replace the rest.
+      const keep = (i.prices || []).filter(p => !got.some(g => sameStore(g.store, p.store)));
+      const prices = [...got, ...keep].sort((a, b) => (a.amount ?? 1e9) - (b.amount ?? 1e9)).slice(0, 12);
+      write(() => updateDoc(itemRef(i.id), { prices, pricesAt: now }));
+    }
+    if (!opts.quiet) toast(found.size ? `Prijzen gevonden voor ${found.size} van ${items.length} ${items.length === 1 ? 'item' : 'items'}` : 'Geen prijzen gevonden.');
+    if (failed && !opts.quiet) toast('Niet elke winkel lukte; vannacht probeert Samenlijst het opnieuw.');
+  } finally {
+    setS({ pricesBusy: false });
+  }
+}
+
+/** New groceries: look their prices up a few seconds later, together. */
+let priceQueue: string[] = [], priceTimer: ReturnType<typeof setTimeout> | undefined;
+export function queuePrices(id: string) {
+  const h = S().households.find(x => x.id === S().hid);
+  if (!h?.place?.trim() || !S().aiOn) return;
+  priceQueue.push(id);
+  clearTimeout(priceTimer);
+  priceTimer = setTimeout(() => { const ids = priceQueue; priceQueue = []; void lookupPrices(ids, { quiet: true }); }, 5000);
+}
+
+/** "Ik ga boodschappen doen", optionally to a few supermarkets: the list is then grouped by where things are cheapest. */
+export function startShopping(listId: string, stores: string[]) {
+  write(() => updateDoc(listRef(listId), { shopper: { by: me(), at: Date.now(), stores: stores.slice(0, 6) } }));
+  toast(stores.length ? `Op weg naar ${stores.join(' en ')}. De lijst staat per winkel.` : 'De anderen zien nu dat je boodschappen doet');
 }
