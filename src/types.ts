@@ -42,7 +42,7 @@ export interface List {
   createdAt: number;
 }
 
-export interface PlanStep { text: string; due: string | null }
+export interface PlanStep { text: string; due: string | null; /** One sentence on how to do this step. */ how?: string }
 export interface PlanBuy { text: string; qty: string }
 export interface PlanQuestion { q: string; options: string[]; multi: boolean }
 export interface PlanAnswer { q: string; a: string }

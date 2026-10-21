@@ -112,11 +112,11 @@ export function elaboratePrompt(b: any) {
     : '';
   return `${taskContext(b)}${known}
 
-Werk deze taak kort en praktisch uit, toegespitst op Nederland en op wat het huishouden vertelde. Schrijf alleen wat iemand niet zelf al bedenkt; geen open deuren, geen vanzelfsprekende stappen.
-- "detail": hooguit één korte zin, alleen als er iets niet-vanzelfsprekends bij komt kijken; anders een lege string.
-- "steps": 0 tot 5 afvinkbare stappen in logische volgorde, elk kort en beginnend met een werkwoord. Alleen stappen die echt los gedaan moeten worden (iets regelen, kopen, afspreken), geen deelhandelingen van één klus. Geef een datum ("due", JJJJ-MM-DD) alleen als er een deadline is en plan dan terug; gebruik anders een lege string.
-- "tips": 0 tot 2 tips, alleen als ze echt iets toevoegen (iets wat vaak vergeten wordt, een kosten- of tijdsbesparing). Liever geen tip dan een voor de hand liggende.
-- "buy": 0 tot 8 dingen die hiervoor gekocht moeten worden, met hoeveelheid ("qty"). Leeg als er niets te kopen is.`;
+Werk de klus zelf concreet uit, toegespitst op Nederland en op wat het huishouden vertelde: wat er precies moet gebeuren en hoe. Geen tips of suggesties, geen open deuren; alleen de details van de klus.
+- "detail": 2 tot 4 zinnen over de klus zelf: de aanpak, wat erbij komt kijken (materiaal, hoeveelheden, volgorde, droog- of wachttijden) en ongeveer hoeveel tijd het kost.
+- "steps": 2 tot 6 stappen in logische volgorde, elk kort en beginnend met een werkwoord ("text"), met in "how" één zin hoe je die stap doet (hoeveel, waarmee, waar op letten). Geef een datum ("due", JJJJ-MM-DD) alleen als er een deadline is en plan dan terug; gebruik anders een lege string.
+- "tips": altijd een lege lijst.
+- "buy": 0 tot 8 dingen die hiervoor gekocht moeten worden, met hoeveelheid ("qty"). Leeg als er niets te kopen is of het al in huis is.`;
 }
 
 export function voicePrompt(b: any) {
@@ -226,9 +226,9 @@ export const PLAN_SCHEMA = {
   type: 'OBJECT',
   properties: {
     detail: STR,
-    steps: { type: 'ARRAY', items: { type: 'OBJECT', properties: { text: STR, due: STR }, required: ['text'] } },
+    steps: { type: 'ARRAY', items: { type: 'OBJECT', properties: { text: STR, how: STR, due: STR }, required: ['text'] } },
     tips: { type: 'ARRAY', items: STR },
     buy: { type: 'ARRAY', items: { type: 'OBJECT', properties: { text: STR, qty: STR }, required: ['text'] } },
   },
-  required: ['detail', 'steps', 'tips', 'buy'],
+  required: ['detail', 'steps', 'buy'],
 };

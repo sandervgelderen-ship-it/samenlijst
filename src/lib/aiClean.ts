@@ -59,12 +59,13 @@ export function cleanQuestions(d: unknown): PlanQuestion[] {
 
 export function cleanPlan(d: unknown, by: string | null, answers: PlanAnswer[] = []): Plan {
   const o = (d && typeof d === 'object' && !Array.isArray(d) ? d : {}) as Record<string, unknown>;
-  const steps = arr(o.steps).map(obj).filter((x): x is Record<string, unknown> => !!x && !!str(x.text, 120)).slice(0, 5)
-    .map(x => ({ text: cap(str(x.text, 120)), due: isoDate(x.due) }));
-  const tips = arr(o.tips).map(t => str(typeof t === 'string' ? t : obj(t)?.text, 220)).filter(Boolean).slice(0, 2);
+  const steps = arr(o.steps).map(obj).filter((x): x is Record<string, unknown> => !!x && !!str(x.text, 120)).slice(0, 6)
+    .map(x => ({ text: cap(str(x.text, 120)), due: isoDate(x.due), ...(str(x.how, 240) ? { how: str(x.how, 240) } : {}) }));
+  // No tips: the household wants details of the job itself, not suggestions around it.
+  const tips: string[] = [];
   const buy = arr(o.buy).map(obj).filter((x): x is Record<string, unknown> => !!x && !!str(x.text, 80)).slice(0, 10)
     .map(x => ({ text: cap(str(x.text, 80)), qty: str(x.qty, 24) }));
-  return { detail: str(o.detail, 400), answers, steps, tips, buy, at: Date.now(), by, stepsAdded: false, buyAdded: null };
+  return { detail: str(o.detail, 700), answers, steps, tips, buy, at: Date.now(), by, stepsAdded: false, buyAdded: null };
 }
 
 export function cleanRoutes(data: unknown): Record<number, { list: string | null; confidence: number }> {

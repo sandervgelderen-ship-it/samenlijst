@@ -62,10 +62,11 @@ export default function SmartSheet({ mode, listId }: { mode: 'add' | 'forgot'; l
           </label>
           <div className="actions"><button type="button" className="btn ghost" onClick={closeSheet}>Annuleren</button><button type="button" className="btn" disabled={busy || (!text.trim() && !photo)} onClick={() => run()}>Bedenk het</button></div>
         </>}
-      {busy && <div className="thinking"><span className="dots" aria-hidden="true" />Gemini denkt na…<button type="button" className="linkbtn" onClick={() => { ctl.current?.abort(); setBusy(false); }}>Stop</button></div>}
-      {err && <><p className="aierr">{err}</p><div className="actions"><span /><button type="button" className="btn ghost" onClick={() => run()}>Opnieuw</button></div></>}
+      {busy && <div className="thinking"><span className="dots" aria-hidden="true" />Gemini denkt na…<button type="button" className="linkbtn" onClick={() => { ctl.current?.abort(); setBusy(false); if (mode === 'forgot') closeSheet(); }}>{mode === 'forgot' ? 'Annuleren' : 'Stop'}</button></div>}
+      {err && <><p className="aierr">{err}</p><div className="actions"><button type="button" className="btn ghost" onClick={closeSheet}>Annuleren</button><button type="button" className="btn ghost" onClick={() => run()}>Opnieuw</button></div></>}
       {results && (results.length === 0
-        ? <p className="note">{mode === 'forgot' ? 'Niets te melden: je lijst lijkt compleet.' : 'Niets nieuws gevonden. Misschien staat alles er al op, of omschrijf het iets anders.'}</p>
+        ? <><p className="note">{mode === 'forgot' ? 'Niets te melden: je lijst lijkt compleet.' : 'Niets nieuws gevonden. Misschien staat alles er al op, of omschrijf het iets anders.'}</p>
+          <div className="actions"><span /><button type="button" className="btn ghost" onClick={closeSheet}>Sluiten</button></div></>
         : <>
           <div className="aires">
             {results.map((r, n) => {
@@ -79,7 +80,10 @@ export default function SmartSheet({ mode, listId }: { mode: 'add' | 'forgot'; l
             })}
           </div>
           <div className="actions">
-            <button type="button" className="btn ghost" onClick={() => run()}>Opnieuw</button>
+            <span style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="btn ghost" onClick={closeSheet}>Annuleren</button>
+              <button type="button" className="linkbtn" onClick={() => run()}>Opnieuw</button>
+            </span>
             <button type="button" className="btn" disabled={!chosen.length} onClick={() => { closeSheet(); addMany(listId, chosen); }}>{chosen.length ? `Voeg ${chosen.length} toe` : 'Niets gekozen'}</button>
           </div>
         </>)}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { BadgePercent, Check, Pencil, Plus, ShoppingCart, Sparkles, Store } from 'lucide-react';
+import { BadgePercent, Check, ChevronRight, Plus, ShoppingCart, Sparkles, Store } from 'lucide-react';
 import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem } from '../lib/domain';
 import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
@@ -192,16 +192,19 @@ function ItemRow({ item: i, kind }: { item: Item; kind: 'shop' | 'todo' }) {
   return (
     <>
       <div ref={ref} className={`item ${i.done ? 'done' : ''} ${popId === i.id ? 'pop' : ''} ${flashId === i.id ? 'flash' : ''}`}>
-        <button className="toggle" disabled={readOnly} aria-pressed={i.done}
+        {/* The checkbox ticks it off; the item itself opens the details. */}
+        <button className="check" disabled={readOnly} aria-pressed={i.done} aria-label={`${i.text} ${i.done ? 'terugzetten' : 'afvinken'}`}
           onClick={e => { const r = (e.currentTarget.querySelector('.box') as HTMLElement)?.getBoundingClientRect(); toggleItem(i.id, r ? { x: r.left + r.width / 2, y: r.top } : undefined); }}>
           <span className="box"><Check strokeWidth={3.4} /></span>
+        </button>
+        <button className="itxt" disabled={readOnly} onClick={() => setS({ sheet: { kind: 'item', id: i.id } })} aria-label={`${i.text}: details`}>
           <span className="txt">
             <span className="t">{i.qty && <span className="qty">{i.qty}</span>}{i.text}</span>
             {subs.length > 0 && <span className="sub">{subs}</span>}
           </span>
+          {kind === 'todo' && i.assignee && <Avatar uid={i.assignee} className="who" />}
+          {!readOnly && <ChevronRight className="chev" size={18} aria-hidden="true" />}
         </button>
-        {kind === 'todo' && i.assignee && <Avatar uid={i.assignee} className="who" />}
-        {!readOnly && <button className="edit" onClick={() => setS({ sheet: { kind: 'item', id: i.id } })} aria-label={`${i.text} bewerken`}><Pencil /></button>}
       </div>
       {kind === 'todo' && !i.done && <PlanPart item={i} />}
     </>
@@ -211,8 +214,8 @@ function ItemRow({ item: i, kind }: { item: Item; kind: 'shop' | 'todo' }) {
 function planLabel(i: Item) {
   const pl = i.plan!; const bits: string[] = [];
   if (pl.steps?.length) bits.push(`${pl.steps.length} ${pl.steps.length === 1 ? 'stap' : 'stappen'}`);
-  if (pl.tips?.length) bits.push(`${pl.tips.length} ${pl.tips.length === 1 ? 'tip' : 'tips'}`);
   if (pl.buy?.length) bits.push(`${pl.buy.length} te kopen`);
+  if (!bits.length && pl.detail) bits.push('details');
   return 'Uitgewerkt' + (bits.length ? ' · ' + bits.join(' · ') : '');
 }
 
@@ -229,7 +232,7 @@ function PlanPart({ item: i }: { item: Item }) {
   if (pq?.questions?.length && (!i.plan || (pq.at || 0) > (i.plan.at || 0))) return <QuestionCard item={i} pq={pq} />;
   const pl = i.plan;
   if (!pl || typeof pl !== 'object') return null;
-  const steps = pl.steps || [], tips = pl.tips || [], buy = pl.buy || [];
+  const steps = pl.steps || [], buy = pl.buy || [];
   const shops = lists.filter(l => l.kind === 'shop').slice(0, 3);
   const added = pl.buyAdded ? lists.find(l => l.id === pl.buyAdded) : undefined;
   return (
@@ -244,13 +247,12 @@ function PlanPart({ item: i }: { item: Item }) {
           {steps.length > 0 && (
             <div className="psec">
               <h4>Stappen</h4>
-              <ol className="psteps">{steps.map((st, n) => <li key={n}><span>{st.text}</span>{st.due && <span className="flag calm">{dueInfo(st.due).label}</span>}</li>)}</ol>
+              <ol className="psteps">{steps.map((st, n) => <li key={n}><span>{st.text}{st.how && <span className="phow">{st.how}</span>}</span>{st.due && <span className="flag calm">{dueInfo(st.due).label}</span>}</li>)}</ol>
               {!readOnly && (pl.stepsAdded
                 ? <p className="note">Deze stappen staan als taken op de lijst.</p>
                 : <div className="pacts"><button className="chip ai" onClick={() => planAddSteps(i.id)}><Plus size={14} /> Zet {steps.length === 1 ? 'deze stap' : `de ${steps.length} stappen`} op de lijst</button></div>)}
             </div>
           )}
-          {tips.length > 0 && <div className="psec"><h4>Suggesties</h4><ul className="ptips">{tips.map((t, n) => <li key={n}>{t}</li>)}</ul></div>}
           {buy.length > 0 && (
             <div className="psec">
               <h4>Nodig</h4>

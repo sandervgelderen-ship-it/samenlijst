@@ -45,7 +45,7 @@ async function generate(parts: (string | { inlineData: { mimeType: string; data:
 const SHAPE: Record<string, string> = {
   'analyze': '[{"i":0,"text":"Halfvolle melk","qty":"2 pak","note":"","cat":"zuivel","due":"","store":"Supermarkt","storeConfidence":0.95,"list":"<lijst-id>","confidence":0.95}]',
   'questions': '{"worth":true,"questions":[{"q":"Hoeveel kamers gaan er mee?","options":["1 of 2","3 of 4","5 of meer"],"multi":false}]}',
-  'elaborate': '{"detail":"...","steps":[{"text":"Uitnodigingen versturen","due":""}],"tips":["..."],"buy":[{"text":"Slingers","qty":"2 st"}]}',
+  'elaborate': '{"detail":"...","steps":[{"text":"Muur afplakken","how":"Plak de plinten en de rand van het plafond af met schilderstape.","due":""}],"tips":[],"buy":[{"text":"Schilderstape","qty":"1 rol"}]}',
   'smart-add-shop': '[{"text":"Lasagnebladen","qty":"1 pak","cat":"houdbaar","pantry":false,"why":""}]',
   'smart-add-todo': '[{"text":"Verhuisdozen regelen","due":"","note":""}]',
   'forgot': '[{"text":"Pastasaus","qty":"1 pot","cat":"houdbaar","why":"Spaghetti staat erop, saus nog niet"}]',
