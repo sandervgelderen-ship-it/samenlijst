@@ -1,6 +1,6 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
-import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem } from '../src/lib/domain';
+import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem, parseRepeat, nextDue, repeatLabel } from '../src/lib/domain';
 import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules, mergeOffers } from '../src/lib/aiClean';
 import type { Item, List } from '../src/types';
 
@@ -111,6 +111,15 @@ t('aanbieding: woorden van het item in het product', () => assert.deepEqual(
   ['AH Halfvolle melk 1 L', 'Ecover WC-reiniger', 'Ecover toiletreiniger 750 ml', 'Kaasstengels'].map(p => offerItem({ product: p, match: '' }, shopping)?.text ?? null),
   ['Halfvolle melk', null, 'Toiletreiniger', null]));
 t('aanbieding: verlopen weg', () => assert.deepEqual(liveOffers([{ until: '2026-10-19' }, { until: '2026-10-20' }, { until: null }], '2026-10-20').length, 2));
+
+// Terugkerende taken
+const tue = new Date('2026-10-20T09:00');
+t('herhalen: elke week', () => assert.deepEqual(parseRepeat('Konijnenhok schoonmaken elke week', tue), { text: 'Konijnenhok schoonmaken', repeat: { unit: 'week', n: 1 }, due: null }));
+t('herhalen: elke 2 weken en om de dag', () => assert.deepEqual([parseRepeat('kliko buiten elke 2 weken', tue).repeat, parseRepeat('planten water om de dag', tue).repeat], [{ unit: 'week', n: 2 }, { unit: 'day', n: 2 }]));
+t('herhalen: elke maandag geeft de eerste maandag', () => assert.deepEqual(parseRepeat('Groene bak buiten elke maandag', tue), { text: 'Groene bak buiten', repeat: { unit: 'week', n: 1 }, due: '2026-10-26' }));
+t('herhalen: maandelijks, en gewone tekst niet', () => assert.deepEqual([parseRepeat('Huur overmaken maandelijks', tue).repeat, parseRepeat('Weekboodschappen doen', tue).repeat], [{ unit: 'month', n: 1 }, null]));
+t('herhalen: volgende datum', () => assert.deepEqual([nextDue('2026-10-20', { unit: 'week', n: 1 }), nextDue('2026-01-31', { unit: 'month', n: 1 }), nextDue('2026-10-20', { unit: 'day', n: 3 })], ['2026-10-27', '2026-02-28', '2026-10-23']));
+t('herhalen: label', () => assert.deepEqual([repeatLabel({ unit: 'week', n: 1 }), repeatLabel({ unit: 'week', n: 2 })], ['Elke week', 'Elke 2 weken']));
 
 // Aanbiedingen per gekozen supermarkt
 const offA = cleanOffers({ week: '19 t/m 25 oktober', offers: [{ store: 'Vomar', product: 'Melk', deal: '1+1', match: 'Melk' }, { store: 'Vomar', product: 'Kaas', deal: '2e halve prijs' }] });

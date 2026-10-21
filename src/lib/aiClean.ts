@@ -88,7 +88,7 @@ export function cleanAisles(data: unknown): Record<number, CatId> {
   return out;
 }
 
-export interface Analysis { text: string; qty: string; note: string; cat: CatId | null; due: string | null; store: string | null; storeConf: number; list: string | null; confidence: number }
+export interface Analysis { text: string; qty: string; note: string; cat: CatId | null; due: string | null; store: string | null; storeConf: number; repeat: string; list: string | null; confidence: number }
 
 /** Per typed line (by index) the cleaned-up items the AI made of it; "melk en eieren" gives two. */
 export function cleanAnalysis(data: unknown, count: number): Record<number, Analysis[]> {
@@ -101,7 +101,7 @@ export function cleanAnalysis(data: unknown, count: number): Record<number, Anal
     if (list.length >= 6) continue;
     list.push({
       text, qty: str(r.qty, 24), note: str(r.note, 140), cat: isCat(r.cat) ? r.cat : null, due: isoDate(r.due),
-      store: str(r.store, 30) || null, storeConf: Math.max(0, Math.min(1, Number(r.storeConfidence) || 0)),
+      store: str(r.store, 30) || null, storeConf: Math.max(0, Math.min(1, Number(r.storeConfidence) || 0)), repeat: str(r.repeat, 40),
       list: typeof r.list === 'string' && r.list ? r.list : null, confidence: Math.max(0, Math.min(1, Number(r.confidence) || 0)),
     });
   }

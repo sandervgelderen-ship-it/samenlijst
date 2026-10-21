@@ -1,3 +1,4 @@
+import type { Repeat } from './lib/domain';
 export type ListKind = 'shop' | 'todo';
 export type ColorName = 'tomaat' | 'munt' | 'lucht' | 'zon' | 'druif' | 'roze';
 export type CatId =
@@ -81,6 +82,10 @@ export interface Item {
   store?: string | null;
   plan?: Plan | null;
   planQ?: PlanQuestions | null;
+  /** A task that comes back ("elke week"): ticking it off puts the next one on the list. */
+  repeat?: Repeat | null;
+  /** The next occurrence made when this one was ticked off (removed again if it is unticked). */
+  nextId?: string | null;
 }
 
 /**
@@ -121,6 +126,8 @@ export interface Entry {
   /** From the AI analysis: where you would normally buy it, and how sure. */
   store?: string | null;
   storeConf?: number;
+  /** From the AI analysis: how often a task comes back, in words ("elke week"). */
+  repeat?: string;
 }
 
 export interface Pending extends Entry {

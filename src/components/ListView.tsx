@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { BadgePercent, Check, ChevronRight, Plus, ShoppingCart, Sparkles, Store } from 'lucide-react';
-import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem } from '../lib/domain';
+import { BadgePercent, Check, ChevronRight, Plus, Repeat2, ShoppingCart, Sparkles, Store } from 'lucide-react';
+import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem, repeatLabel } from '../lib/domain';
 import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
 import type { CatId, Item, List, PlanQuestions } from '../types';
@@ -186,6 +186,7 @@ function ItemRow({ item: i, kind }: { item: Item; kind: 'shop' | 'todo' }) {
   if (i.urgent && !i.done) subs.push(<span key="u" className="flag">Dringend</span>);
   if (offer) subs.push(<span key="o" className="flag offer-flag" title={`${o2s(offer)}`}>% {offer.deal || 'Aanbieding'} · {offer.store}</span>);
   if (kind === 'todo' && i.due && !i.done) { const d = dueInfo(i.due); subs.push(<span key="d" className={`flag ${d.late ? 'late' : d.soon ? '' : 'calm'}`}>{d.label}</span>); }
+  if (kind === 'todo' && i.repeat) subs.push(<span key="r" className="flag calm"><Repeat2 size={12} style={{ verticalAlign: -2, marginRight: 3 }} />{repeatLabel(i.repeat)}</span>);
   if (i.done && i.doneBy) subs.push(<span key="b">{first(i.doneBy)}{kind === 'shop' ? ' heeft het' : ' deed dit'}</span>);
   else if (i.addedBy && i.addedBy !== me && kind === 'shop') subs.push(<span key="a">van {first(i.addedBy)}</span>);
 

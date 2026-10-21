@@ -6,7 +6,7 @@ import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { post } from '../api';
 import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, mergeOffers, cleanQuestions, cleanRules, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
 import {
-  CAT_LABEL, catFor, colorOf, COLORS, decideStore, isSuper, kbKey, knownStore, makeMemory, memoryLines, normStore, parseDue, parseEntry, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS,
+  CAT_LABEL, catFor, colorOf, COLORS, decideStore, dueInfo, isSuper, kbKey, knownStore, makeMemory, memoryLines, nextDue, normStore, parseDue, parseEntry, parseRepeat, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS, type Repeat,
 } from '../lib/domain';
 import { S, setS } from '../store/useStore';
 import type { CatId, Entry, Item, List, ListKind, Memory, OfferResult, PlanAnswer, Pending, Receipt, RouteWhy, StoreAsk } from '../types';
@@ -86,10 +86,23 @@ async function runLessons() {
 export type AddResult = { id: string; status: 'new' | 'dup' | 'revived' } | null;
 
 type StoreHint = { store?: string | null; storeConf?: number; aiStore?: boolean };
-export function addItem(listId: string, raw: string, opts: { due?: string | null; quiet?: boolean; weight?: number; note?: string; cat?: CatId | null } & StoreHint = {}): AddResult {
+export function addItem(listId: string, raw: string, opts: { due?: string | null; quiet?: boolean; weight?: number; note?: string; cat?: CatId | null; repeat?: string } & StoreHint = {}): AddResult {
   const list = listById(listId); if (!list || !raw.trim()) return null;
   let { text, qty } = parseEntry(raw);
   let due = opts.due || null;
+  let note = String(opts.note || '');
+  // Tasks that come back: "elke week" in the text, from the AI, or as the note ("Elke week").
+  let repeat: Repeat | null = null;
+  if (list.kind === 'todo') {
+    const fromText = parseRepeat(text), fromAi = parseRepeat(opts.repeat || ''), fromNote = parseRepeat(note);
+    const r = fromText.repeat ? fromText : fromAi.repeat ? fromAi : fromNote;
+    if (r.repeat) {
+      repeat = r.repeat;
+      if (r === fromText) text = r.text;
+      if (fromNote.repeat) note = kbKey(fromNote.text) === kbKey(note) ? '' : fromNote.text;
+      if (!due && r.due) due = r.due;
+    }
+  }
   if (list.kind === 'todo' && !due) { const d = parseDue(text); if (d.due) { text = d.text; due = d.due; } }
   const key = kbKey(text);
   const same = listItems(listId).find(i => kbKey(i.text) === key);
@@ -111,11 +124,12 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
   }
   const id = newId('items');
   const body: Omit<Item, 'id'> = {
-    listId, text, qty, note: String(opts.note || '').slice(0, 140), cat: list.kind === 'shop' ? pickCat(text, S().items, opts.cat) : null,
+    listId, text, qty, note: note.slice(0, 140), cat: list.kind === 'shop' ? pickCat(text, S().items, opts.cat) : null,
     done: false, doneBy: null, doneAt: null, urgent: false, due: list.kind === 'todo' ? due : null, assignee: null,
     addedBy: me(), createdAt: Date.now(),
   };
   if (where.store) body.store = where.store;
+  if (repeat) body.repeat = repeat;
   write(() => setDoc(itemRef(id), body));
   if (where.ask) askStore(id, listId, text, where.guess);
   if (list.kind === 'todo' && list.autoPlan !== false && S().aiOn) queuePlan(id, false, body.text);
@@ -152,7 +166,30 @@ export function setStore(itemId: string, store: string | null) {
 export function toggleItem(id: string, origin?: { x: number; y: number }) {
   const it = S().items.find(i => i.id === id); if (!it) return;
   const done = !it.done;
-  write(() => updateDoc(itemRef(id), { done, doneBy: done ? me() : null, doneAt: done ? Date.now() : null }));
+  const patch: Partial<Item> = { done, doneBy: done ? me() : null, doneAt: done ? Date.now() : null };
+  // A task that comes back: ticking it off puts the next one on the list; unticking takes that one away again.
+  // Older tasks only have it in the note ("Elke week").
+  const rep = it.repeat || parseRepeat(it.note || '').repeat || parseRepeat(it.text).repeat;
+  if (done && rep && listById(it.listId)?.kind === 'todo') {
+    const today = todayISO();
+    let due = nextDue(it.due || today, rep);
+    while (due <= today) due = nextDue(due, rep);
+    const nextId = newId('items');
+    const body: Omit<Item, 'id'> = {
+      listId: it.listId, text: it.text, qty: it.qty || '', note: it.note || '', cat: null,
+      done: false, doneBy: null, doneAt: null, urgent: false, due, assignee: it.assignee || null,
+      addedBy: it.addedBy || me(), createdAt: Date.now(), repeat: rep,
+      ...(it.plan ? { plan: it.plan } : {}),
+    };
+    write(() => setDoc(itemRef(nextId), body));
+    patch.nextId = nextId;
+    toast(`De volgende keer staat erop: ${dueInfo(due).label.toLowerCase()}`);
+  } else if (!done && it.nextId) {
+    const next = S().items.find(i => i.id === it.nextId);
+    if (next && !next.done) write(() => deleteDoc(itemRef(next.id)));
+    patch.nextId = null;
+  }
+  write(() => updateDoc(itemRef(id), patch));
   if (done) setS({ popId: id });
   const others = listItems(it.listId).filter(i => i.id !== id);
   if (done && others.length >= 1 && others.every(i => i.done)) {
@@ -271,7 +308,7 @@ function place(p: Entry, listId: string, why: RouteWhy): Receipt | null {
   const l = listById(listId); if (!l) return null;
   const r = addItem(listId, (p.qty ? p.qty + ' ' : '') + p.text, {
     due: l.kind === 'todo' ? p.due : null, quiet: true, note: p.note, cat: p.cat,
-    store: p.store, storeConf: p.storeConf, aiStore: p.store !== undefined,
+    store: p.store, storeConf: p.storeConf, aiStore: p.store !== undefined, repeat: p.repeat,
   });
   if (!r) return null;
   return { itemId: r.id, listId, why: r.status === 'dup' ? 'dup' : why };
@@ -322,7 +359,7 @@ export async function quickAddEntries(entries: Entry[], opts: { analyzed?: boole
     if (!outs?.length) { ruleRoute(part, placed, unsure); return; }
     outs.forEach((o, k) => {
       const text = o.text || part.text, due = o.due || part.due;
-      const p: Entry = { ...part, pid: `${part.pid}-${k}`, text, qty: o.qty || part.qty, due, hasDate: !!due, key: kbKey(text), note: o.note, cat: o.cat, store: o.store, storeConf: o.storeConf };
+      const p: Entry = { ...part, pid: `${part.pid}-${k}`, text, qty: o.qty || part.qty, due, hasDate: !!due, key: kbKey(text), note: o.note, cat: o.cat, store: o.store, storeConf: o.storeConf, repeat: o.repeat };
       if (has(part.explicit)) { const x = place(p, part.explicit, 'explicit'); if (x) placed.push(x); return; }
       const r = route(p, S().lists, S().items);
       const aiList = has(o.list) ? o.list : null;
@@ -351,7 +388,7 @@ export async function listAdd(listId: string, raw: string) {
     if (!outs?.length) { addItem(listId, (part.qty ? part.qty + ' ' : '') + part.text, { due: part.due }); return; }
     outs.forEach(o => {
       const text = o.text || part.text, qty = o.qty || part.qty;
-      addItem(listId, (qty ? qty + ' ' : '') + text, { due: o.due || part.due, note: o.note, cat: o.cat, store: o.store, storeConf: o.storeConf, aiStore: true });
+      addItem(listId, (qty ? qty + ' ' : '') + text, { due: o.due || part.due, note: o.note, cat: o.cat, store: o.store, storeConf: o.storeConf, aiStore: true, repeat: o.repeat });
     });
   });
 }

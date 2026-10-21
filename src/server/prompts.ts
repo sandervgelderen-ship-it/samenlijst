@@ -27,6 +27,7 @@ Analyseer elk item:
 - "note": merk of ander detail dat genoemd werd. Geldt een voorkeur van het huishouden voor dit item (bijv. ecologisch, biologisch, een vast merk), zet die hier kort neer. Anders een lege string.
 - "cat": bij boodschappen de afdeling-id (${CAT_PROMPT}); bij taken een lege string.
 - "due": datum JJJJ-MM-DD als er een moment genoemd is, anders een lege string.
+- "repeat": bij taken die terugkomen hoe vaak, in woorden ("elke week", "elke 2 weken", "elke maandag", "elke maand"), ook als het in een bijzin staat ("het konijnenhok moet wekelijks"); anders een lege string. Haal het dan uit "text" en "note".
 - "store": bij boodschappen waar je dit in Nederland normaal koopt: "Supermarkt" als een gewone supermarkt (Albert Heijn, Jumbo) het verkoopt, anders het soort winkel, zoals "Drogist", "Bouwmarkt", "Tuincentrum", "Dierenwinkel", "Apotheek", "Slager", "Bakker", "Markt" of "Online". Noemt de gebruiker zelf een winkel, gebruik die. Bij taken een lege string.
 - "storeConfidence": tussen 0 en 1 hoe zeker die winkel is. Hoog (0.9) voor gewone boodschappen als melk of brood. Laag (0.6 of minder) als het zowel in de supermarkt als elders te koop is of als je twijfelt, bijvoorbeeld stro, hooi, batterijen, een lamp, potgrond of vogelzaad.
 - "list": id van de lijst waar het hoort; "confidence" tussen 0 en 1, hoog alleen als het duidelijk is.
@@ -189,7 +190,7 @@ export const ANALYZE_SCHEMA = {
   type: 'ARRAY',
   items: {
     type: 'OBJECT',
-    properties: { i: { type: 'INTEGER' }, text: STR, qty: STR, note: STR, cat: STR, due: STR, store: STR, storeConfidence: { type: 'NUMBER' }, list: STR, confidence: { type: 'NUMBER' } },
+    properties: { i: { type: 'INTEGER' }, text: STR, qty: STR, note: STR, cat: STR, due: STR, repeat: STR, store: STR, storeConfidence: { type: 'NUMBER' }, list: STR, confidence: { type: 'NUMBER' } },
     required: ['i', 'text', 'list', 'confidence'],
   },
 };

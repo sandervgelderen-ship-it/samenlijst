@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { CAT_LABEL, CATS, normStore, STORES, SUPERMARKT } from '../../lib/domain';
+import { CAT_LABEL, CATS, normStore, STORES, SUPERMARKT, kbKey, parseRepeat, repeatLabel, type Repeat } from '../../lib/domain';
 import { deleteItems, learnFrom, moveItem, queuePlan, setStore, updateItem, usedStores } from '../../data/actions';
 import { setS, useStore } from '../../store/useStore';
 import type { CatId, Item } from '../../types';
 import { Avatar, useHousehold, useNames } from '../bits';
 import { Sheet, closeSheet } from './Sheets';
+
+const REPEATS: { key: string; value: Repeat | null }[] = [
+  { key: '', value: null }, { key: 'day1', value: { unit: 'day', n: 1 } }, { key: 'week1', value: { unit: 'week', n: 1 } },
+  { key: 'week2', value: { unit: 'week', n: 2 } }, { key: 'month1', value: { unit: 'month', n: 1 } }, { key: 'year1', value: { unit: 'year', n: 1 } },
+];
+const repeatKey = (r: Repeat | null | undefined) => (r ? `${r.unit}${r.n}` : '');
 
 export default function ItemSheet({ id }: { id: string }) {
   const item = useStore(s => s.items.find(i => i.id === id));
@@ -13,7 +19,7 @@ export default function ItemSheet({ id }: { id: string }) {
   const aiOn = useStore(s => s.aiOn);
   const household = useHousehold();
   const { full } = useNames();
-  const [f, setF] = useState(() => item ? { text: item.text, qty: item.qty || '', note: item.note || '', cat: (item.cat || 'overig') as CatId, due: item.due || '', store: normStore(item.store) || SUPERMARKT, urgent: !!item.urgent, assignee: item.assignee || null, listId: item.listId } : null);
+  const [f, setF] = useState(() => item ? { text: item.text, qty: item.qty || '', note: item.note || '', cat: (item.cat || 'overig') as CatId, due: item.due || '', store: normStore(item.store) || SUPERMARKT, repeat: repeatKey(item.repeat || parseRepeat(item.note || '').repeat), urgent: !!item.urgent, assignee: item.assignee || null, listId: item.listId } : null);
 
   // Someone else deleted it while it was open.
   useEffect(() => { if (!item) { closeSheet(); } }, [item]);
@@ -24,7 +30,9 @@ export default function ItemSheet({ id }: { id: string }) {
 
   function save() {
     const patch: Partial<Item> = { text: (f!.text.trim() || item!.text).slice(0, 120), qty: f!.qty.trim().slice(0, 24), note: f!.note.trim().slice(0, 140), urgent: f!.urgent };
-    if (shop) patch.cat = f!.cat; else { patch.due = f!.due || null; patch.assignee = f!.assignee; }
+    if (shop) patch.cat = f!.cat; else { patch.due = f!.due || null; patch.assignee = f!.assignee; patch.repeat = REPEATS.find(r => r.key === f!.repeat)?.value ?? null;
+      // "Elke week" as the whole note: that is now the repeat setting.
+      const pn = parseRepeat(patch.note || ''); if (pn.repeat && !kbKey(pn.text.replace(/^Elke.*$/i, ''))) patch.note = ''; }
     updateItem(id, patch);
     // Corrections may teach a general preference ("Schoonmaakproducten ecologisch"); Gemini decides.
     const changed: string[] = [];
@@ -54,6 +62,13 @@ export default function ItemSheet({ id }: { id: string }) {
           ? <label>Afdeling<select className="field" id="e-cat" value={f.cat} onChange={e => set({ cat: e.target.value as CatId })}>{CATS.map(([c, label]) => <option key={c} value={c}>{label}</option>)}</select></label>
           : <label>Wanneer<input className="field" type="date" id="e-due" value={f.due} onChange={e => set({ due: e.target.value })} /></label>}
       </div>
+      {!shop && (
+        <label>Herhalen
+          <select className="field" id="e-repeat" value={f.repeat} onChange={e => set({ repeat: e.target.value })}>
+            {REPEATS.map(r => <option key={r.key} value={r.key}>{r.value ? repeatLabel(r.value) : 'Niet'}</option>)}
+          </select>
+        </label>
+      )}
       {shop && (
         <label>Waar koop je het
           <input className="field" id="e-store" list="e-stores" value={f.store} maxLength={30} onChange={e => set({ store: e.target.value })} onFocus={e => e.target.select()} />

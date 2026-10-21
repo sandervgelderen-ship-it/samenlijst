@@ -138,6 +138,61 @@ export function parseDue(text: string, nowIn = new Date()): { text: string; due:
   return { text, due: null };
 }
 
+/* ---------- Repeating tasks ---------- */
+export type RepeatUnit = 'day' | 'week' | 'month' | 'year';
+export interface Repeat { unit: RepeatUnit; n: number }
+const UNIT: Record<string, RepeatUnit> = { dag: 'day', dagen: 'day', week: 'week', weken: 'week', maand: 'month', maanden: 'month', jaar: 'year', jaren: 'year' };
+const ADVERB: Record<string, RepeatUnit> = { dagelijks: 'day', wekelijks: 'week', maandelijks: 'month', jaarlijks: 'year' };
+
+/**
+ * "Konijnenhok schoonmaken elke week", "planten water geven om de dag", "elke 2 weken", "maandelijks",
+ * "elke maandag": how often it comes back, the text without it, and for a weekday its first date.
+ */
+export function parseRepeat(text: string, nowIn = new Date()): { text: string; repeat: Repeat | null; due: string | null } {
+  const now = new Date(nowIn); now.setHours(12, 0, 0, 0);
+  const tidy = (s: string) => cap(s.replace(/\s+/g, ' ').replace(/^[\s,]+|[\s,]+$/g, ''));
+  const rules: [RegExp, (m: RegExpMatchArray) => { repeat: Repeat; wd?: number } | null][] = [
+    [/(?:^|\s)(?:elke|iedere|ieder|elk)\s(\d{1,2})\s(dagen|weken|maanden|jaar|jaren)(?=\s|$)/i, m => ({ repeat: { unit: UNIT[m[2].toLowerCase()], n: Math.max(1, +m[1]) } })],
+    [/(?:^|\s)om\sde\s(\d{1,2})\s(dagen|weken|maanden)(?=\s|$)/i, m => ({ repeat: { unit: UNIT[m[2].toLowerCase()], n: Math.max(1, +m[1]) } })],
+    [/(?:^|\s)om\sde\s(dag|week|maand)(?=\s|$)/i, m => ({ repeat: { unit: UNIT[m[1].toLowerCase()], n: 2 } })],
+    [new RegExp('(?:^|\\s)(?:elke|iedere)\\s(' + WD.join('|') + ')(?:avond|ochtend|middag)?(?=\\s|$)', 'i'), m => ({ repeat: { unit: 'week', n: 1 }, wd: WD.indexOf(m[1].toLowerCase()) })],
+    [/(?:^|\s)(?:elke|iedere|ieder|elk)\s(dag|week|maand|jaar)(?=\s|$)/i, m => ({ repeat: { unit: UNIT[m[1].toLowerCase()], n: 1 } })],
+    [/(?:^|\s)(dagelijks|wekelijks|maandelijks|jaarlijks)(?=\s|$)/i, m => ({ repeat: { unit: ADVERB[m[1].toLowerCase()], n: 1 } })],
+  ];
+  for (const [re, fn] of rules) {
+    const m = text.match(re);
+    if (!m || m.index === undefined) continue;
+    const r = fn(m); if (!r) continue;
+    const rest = tidy(text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length));
+    let due: string | null = null;
+    if (r.wd !== undefined && r.wd >= 0) { const d = new Date(now); d.setDate(d.getDate() + ((r.wd - now.getDay() + 7) % 7)); due = isoOf(d); }
+    return { text: rest || tidy(text), repeat: r.repeat, due };
+  }
+  return { text, repeat: null, due: null };
+}
+
+/** The next date after `from` (YYYY-MM-DD). Months keep the day where they can (31 jan → 28/29 feb). */
+export function nextDue(from: string, r: Repeat): string {
+  const d = new Date(from + 'T12:00');
+  if (r.unit === 'day') d.setDate(d.getDate() + r.n);
+  else if (r.unit === 'week') d.setDate(d.getDate() + 7 * r.n);
+  else {
+    const day = d.getDate();
+    d.setDate(1);
+    if (r.unit === 'month') d.setMonth(d.getMonth() + r.n); else d.setFullYear(d.getFullYear() + r.n);
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(day, last));
+  }
+  return isoOf(d);
+}
+
+export function repeatLabel(r: Repeat | null | undefined): string {
+  if (!r) return '';
+  const one: Record<RepeatUnit, string> = { day: 'Elke dag', week: 'Elke week', month: 'Elke maand', year: 'Elk jaar' };
+  const many: Record<RepeatUnit, string> = { day: 'dagen', week: 'weken', month: 'maanden', year: 'jaar' };
+  return r.n <= 1 ? one[r.unit] : `Elke ${r.n} ${many[r.unit]}`;
+}
+
 export function dueInfo(due: string, now = new Date()): { label: string; late?: boolean; soon?: boolean } {
   const d0 = new Date(todayISO(now) + 'T00:00'), d1 = new Date(due + 'T00:00');
   const diff = Math.round((+d1 - +d0) / 864e5);
