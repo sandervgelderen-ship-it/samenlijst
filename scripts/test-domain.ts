@@ -1,6 +1,6 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
-import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem, parseRepeat, nextDue, repeatLabel, parseEuro, cheapest, splitByStore, sameStore } from '../src/lib/domain';
+import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem, parseRepeat, nextDue, repeatLabel, parseEuro, cheapest, splitByStore, sameStore, parseSize, unitPrice, sortPrices } from '../src/lib/domain';
 import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules, mergeOffers } from '../src/lib/aiClean';
 import type { Item, List } from '../src/types';
 
@@ -131,6 +131,20 @@ const split = splitByStore([melk, { prices: [pr('AH', '€2,00')], store: null }
 t('prijs: per winkel groeperen', () => assert.deepEqual(split.map(([s, g]) => [s, g.length]), [['Albert Heijn', 2], ['Vomar', 1], ['Dierenwinkel', 1]]));
 t('aanbieding: Appelsientje is geen appels', () => assert.equal(offerItem({ product: 'Appelsientje sinaasappelsap', match: 'Appels' }, [{ text: 'Appels' }]), undefined));
 t('aanbieding: Elstar appels wel', () => assert.equal(offerItem({ product: 'Elstar appelen 1 kg', match: '' }, [{ text: 'Appels' }])?.text, 'Appels'));
+
+// Prijs per eenheid
+t('inhoud: stuks, liters, grammen, multipacks', () => assert.deepEqual(
+  ['AH Scharreleieren M/L 12 stuks', 'Scharreleieren 1* M L 12 stuks', 'Halfvolle melk 1,5 L', 'Kaas 500 g', '4 x 125 g', '6-pack 330 ml', 'Bananen per kilo', 'Boter'].map(x => parseSize(x)),
+  [{ qty: 12, unit: 'st' }, { qty: 12, unit: 'st' }, { qty: 1.5, unit: 'l' }, { qty: 0.5, unit: 'kg' }, { qty: 0.5, unit: 'kg' }, { qty: 1.98, unit: 'l' }, { qty: 1, unit: 'kg' }, null]));
+const eggs = [
+  { store: 'Aldi', product: 'Vrije-uitloopeieren 6 stuks', price: '€1,49', amount: 1.49, deal: '', until: null },
+  { store: 'Vomar', product: 'Scharreleieren 12 stuks', price: '€3,15', amount: 3.15, deal: '', until: null },
+  { store: 'DekaMarkt', product: 'Scharreleieren M/L 12 stuks', price: '€2,49', amount: 2.49, deal: '', until: null },
+  { store: 'Ekoplaza', product: 'Eieren', price: '€0,99', amount: 0.99, deal: '', until: null },
+];
+t('eenheidsprijs: 12 eieren voor €2,49 wint van 6 voor €1,49', () => assert.deepEqual(sortPrices(eggs).map(p => p.store), ['DekaMarkt', 'Aldi', 'Vomar', 'Ekoplaza']));
+t('eenheidsprijs: per stuk', () => assert.equal(unitPrice(eggs[2])!.per.toFixed(3), '0.208'));
+t('eenheidsprijs: goedkoopste gebruikt het', () => assert.equal(cheapest(eggs)!.store, 'DekaMarkt'));
 
 // Aanbiedingen per gekozen supermarkt
 const offA = cleanOffers({ week: '19 t/m 25 oktober', offers: [{ store: 'Vomar', product: 'Melk', deal: '1+1', match: 'Melk' }, { store: 'Vomar', product: 'Kaas', deal: '2e halve prijs' }] });

@@ -17,7 +17,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { cleanOffers, cleanPrices, groundingSources, mergeOffers, parseLoose } from '../src/lib/aiClean';
-import { isSuper, memoryLines, sameStore, todayLong } from '../src/lib/domain';
+import { isSuper, memoryLines, sameStore, sortPrices, todayLong } from '../src/lib/domain';
 import { OFFERS_SHAPE, offersPrompt, PRICES_SHAPE, pricesPrompt } from '../src/server/prompts';
 import type { ItemPrice, List, Memory, OfferResult } from '../src/types';
 
@@ -129,7 +129,7 @@ for (const h of households.docs) {
     for (const d of shopItems) {
       const got = found.get(d.id); if (!got) continue;
       const old = (Array.isArray(d.get('prices')) ? d.get('prices') : []) as ItemPrice[];
-      const prices = [...got, ...old.filter(p => !got.some(g => sameStore(g.store, p.store)))].sort((a, b) => (a.amount ?? 1e9) - (b.amount ?? 1e9)).slice(0, 12);
+      const prices = sortPrices([...got, ...old.filter(p => !got.some(g => sameStore(g.store, p.store)))]).slice(0, 12);
       await d.ref.update({ prices, pricesAt: Date.now() });
     }
     if (shopItems.length) say(`  prijzen bijgewerkt voor ${found.size} van ${shopItems.length} items`);

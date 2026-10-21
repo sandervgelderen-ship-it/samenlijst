@@ -6,7 +6,7 @@ import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { post } from '../api';
 import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, cleanPrices, mergeOffers, cleanQuestions, cleanRules, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
 import {
-  CAT_LABEL, catFor, colorOf, COLORS, decideStore, dueInfo, isSuper, kbKey, sameStore, knownStore, makeMemory, memoryLines, nextDue, normStore, parseDue, parseEntry, parseRepeat, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS, type Repeat,
+  CAT_LABEL, catFor, colorOf, COLORS, decideStore, dueInfo, isSuper, kbKey, sameStore, sortPrices, knownStore, makeMemory, memoryLines, nextDue, normStore, parseDue, parseEntry, parseRepeat, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS, type Repeat,
 } from '../lib/domain';
 import { S, setS } from '../store/useStore';
 import type { CatId, Entry, Item, ItemPrice, List, ListKind, Memory, OfferResult, PlanAnswer, Pending, Receipt, RouteWhy, StoreAsk } from '../types';
@@ -689,7 +689,7 @@ export async function lookupPrices(ids?: string[], opts: { quiet?: boolean } = {
       if (!got) continue;
       // Keep earlier prices from shops this round did not ask (or did not find), replace the rest.
       const keep = (i.prices || []).filter(p => !got.some(g => sameStore(g.store, p.store)));
-      const prices = [...got, ...keep].sort((a, b) => (a.amount ?? 1e9) - (b.amount ?? 1e9)).slice(0, 12);
+      const prices = sortPrices([...got, ...keep]).slice(0, 12);
       write(() => updateDoc(itemRef(i.id), { prices, pricesAt: now }));
     }
     if (!opts.quiet) toast(found.size ? `Prijzen gevonden voor ${found.size} van ${items.length} ${items.length === 1 ? 'item' : 'items'}` : 'Geen prijzen gevonden.');

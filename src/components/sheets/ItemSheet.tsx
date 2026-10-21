@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, Sparkles } from 'lucide-react';
-import { CAT_LABEL, CATS, normStore, STORES, SUPERMARKT, kbKey, parseRepeat, repeatLabel, type Repeat } from '../../lib/domain';
+import { CAT_LABEL, CATS, normStore, STORES, SUPERMARKT, kbKey, parseRepeat, repeatLabel, sortPrices, unitLabel, unitPrice, type Repeat } from '../../lib/domain';
 import { deleteItems, learnFrom, lookupPrices, moveItem, queuePlan, setStore, updateItem, usedStores } from '../../data/actions';
 import { setS, useStore } from '../../store/useStore';
 import type { CatId, Item } from '../../types';
@@ -115,7 +115,7 @@ function Prices({ item }: { item: Item }) {
   const aiOn = useStore(s => s.aiOn);
   const readOnly = useStore(s => s.readOnly);
   const place = useHousehold()?.place?.trim();
-  const prices = (item.prices || []).filter(p => p.amount != null);
+  const prices = sortPrices((item.prices || []).filter(p => p.amount != null));
   if (!place) return null;
   return (
     <div style={{ display: 'grid', gap: 6 }}>
@@ -124,7 +124,9 @@ function Prices({ item }: { item: Item }) {
         <div className="prices">
           {prices.map((p, n) => (
             <div className={`prow ${n === 0 ? 'best' : ''}`} key={p.store}>
-              <b>{p.price}</b><span>{p.store}{p.deal ? ` · ${p.deal}` : ''}</span><span className="note">{p.product}</span>
+              <b>{p.price}</b>
+              <span>{p.store}{p.deal ? ` · ${p.deal}` : ''}{unitPrice(p) && <span className="per">{unitLabel(unitPrice(p)!)}</span>}</span>
+              <span className="note">{p.product}</span>
             </div>
           ))}
         </div>
@@ -134,7 +136,7 @@ function Prices({ item }: { item: Item }) {
           <RefreshCw size={13} /> {busy ? 'Zoeken…' : prices.length ? 'Prijzen opnieuw zoeken' : 'Zoek prijzen'}
         </button>
       )}
-      <p className="note">Gevonden door Gemini met Google; check de prijs in de winkel.</p>
+      <p className="note">Vergeleken per kilo, liter of stuk waar de verpakking dat zegt. Gevonden door Gemini met Google; check de prijs in de winkel.</p>
     </div>
   );
 }

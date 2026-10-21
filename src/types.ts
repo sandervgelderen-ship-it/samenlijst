@@ -104,6 +104,8 @@ export interface ItemPrice {
   amount: number | null;
   /** The offer, if this price is one ("1+1 gratis"). */
   deal: string;
+  /** What is in the pack ("6 stuks", "1 l", "500 g"), to compare per kg, liter or piece. */
+  size?: string;
   until: string | null;
 }
 

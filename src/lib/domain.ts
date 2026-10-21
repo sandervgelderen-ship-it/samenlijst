@@ -407,15 +407,62 @@ const CHAIN_ALIAS: Record<string, string> = { ah: 'albert heijn', 'ah to go': 'a
 export const chainKey = (s: string) => { const k = norm(s).replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); return CHAIN_ALIAS[k] || k; };
 export const sameStore = (a: string, b: string) => chainKey(a) === chainKey(b);
 
-/** The cheapest known price for an item, optionally only at the shops someone is going to. */
-export function cheapest(prices: ItemPrice[] | null | undefined, stores?: string[]): ItemPrice | null {
-  let best: ItemPrice | null = null;
-  for (const p of prices || []) {
-    if (p.amount == null) continue;
-    if (stores && stores.length && !stores.some(s => sameStore(s, p.store))) continue;
-    if (!best || p.amount < best.amount!) best = p;
+/* Unit prices: 6 eggs for €1,49 is not cheaper than 12 for €2,49. */
+export type SizeUnit = 'kg' | 'l' | 'st';
+const SIZE_UNITS: [RegExp, SizeUnit, number][] = [
+  [/^(kg|kilo|kilogram)$/, 'kg', 1], [/^(g|gr|gram)$/, 'kg', 0.001],
+  [/^(l|ltr|liter|litre)$/, 'l', 1], [/^(cl)$/, 'l', 0.01], [/^(ml)$/, 'l', 0.001],
+  [/^(st|stuk|stuks|stk|eieren|eitjes|rollen|rol|tabletten|tabs|pads|capsules|cups|zakjes|blikjes|flesjes|pakjes)$/, 'st', 1],
+];
+const unitOf = (u: string): [SizeUnit, number] | null => { for (const [re, unit, f] of SIZE_UNITS) if (re.test(u)) return [unit, f]; return null; };
+const NUM = '(\\d+(?:[.,]\\d+)?)';
+/**
+ * How much is in the pack, from "AH Scharreleieren 12 stuks", "Halfvolle melk 1,5 L", "4 x 125 g", "6-pack 330 ml".
+ * Null when it says nothing usable.
+ */
+export function parseSize(s: unknown): { qty: number; unit: SizeUnit } | null {
+  const t = norm(String(s ?? '')).replace(/×/g, 'x');
+  const num = (x: string) => +x.replace(',', '.');
+  const multi = t.match(new RegExp(NUM + '\\s*(?:x|-pack|pack|stuks? a)\\s*' + NUM + '\\s*([a-z]+)'));
+  if (multi) { const u = unitOf(multi[3]); if (u) return { qty: num(multi[1]) * num(multi[2]) * u[1], unit: u[0] }; }
+  for (const m of t.matchAll(new RegExp(NUM + '\\s*([a-z]+)', 'g'))) {
+    const u = unitOf(m[2]); if (u && num(m[1]) > 0) return { qty: num(m[1]) * u[1], unit: u[0] };
   }
-  return best;
+  if (/per\s(kilo|kg)\b/.test(t)) return { qty: 1, unit: 'kg' };
+  if (/per\s(liter|l)\b/.test(t)) return { qty: 1, unit: 'l' };
+  return null;
+}
+
+/** Price per kg, per liter or per piece; null when the pack size is unknown. */
+export function unitPrice(p: Pick<ItemPrice, 'amount' | 'product'> & { size?: string }): { per: number; unit: SizeUnit } | null {
+  if (p.amount == null) return null;
+  const size = parseSize(p.size) || parseSize(p.product);
+  if (!size || size.qty <= 0) return null;
+  return { per: p.amount / size.qty, unit: size.unit };
+}
+export const unitLabel = (u: { per: number; unit: SizeUnit }) => `${euro(u.per)}/${u.unit === 'st' ? 'st' : u.unit}`;
+
+/**
+ * Cheapest first. Prices are compared per kg, liter or piece when their packs say how much is in them (in the
+ * unit most of them use); prices without a known size come after those, by pack price.
+ */
+export function sortPrices<T extends Pick<ItemPrice, 'amount' | 'product'> & { size?: string }>(prices: T[]): T[] {
+  const units = prices.map(unitPrice);
+  const count = new Map<SizeUnit, number>();
+  units.forEach(u => { if (u) count.set(u.unit, (count.get(u.unit) || 0) + 1); });
+  const main = [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const key = (n: number): [number, number] => {
+    const u = units[n];
+    if (u && u.unit === main) return [0, u.per];
+    return [1, prices[n].amount ?? 1e9];
+  };
+  return prices.map((p, n) => [p, key(n)] as const).sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1]).map(x => x[0]);
+}
+
+/** The cheapest known price for an item (per unit where possible), optionally only at the shops someone is going to. */
+export function cheapest(prices: ItemPrice[] | null | undefined, stores?: string[]): ItemPrice | null {
+  const ok = (prices || []).filter(p => p.amount != null && (!stores || !stores.length || stores.some(s => sameStore(s, p.store))));
+  return ok.length ? sortPrices(ok)[0] : null;
 }
 
 /**

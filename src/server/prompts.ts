@@ -156,7 +156,7 @@ Per regel: "text" is één korte Nederlandse zin van minstens drie woorden, "top
 /** The JSON shape the offers prompt asks for (search grounding cannot use a response schema). */
 export const OFFERS_SHAPE = '{"week":"20 t/m 26 oktober","stores":["Albert Heijn","Jumbo"],"offers":[{"store":"Albert Heijn","product":"Halfvolle melk","deal":"2e halve prijs","price":"€1,19","until":"2026-10-26","match":"Melk","cat":"zuivel"}]}';
 
-export const PRICES_SHAPE = '{"prices":[{"i":0,"store":"Lidl","product":"Milbona halfvolle melk 1 L","price":"€1,09","deal":"","until":""}]}';
+export const PRICES_SHAPE = '{"prices":[{"i":0,"store":"Lidl","product":"Milbona halfvolle melk 1 L","size":"1 l","price":"€1,09","deal":"","until":""}]}';
 
 /**
  * What items cost now, found with Google Search: at the household's supermarkets, or for things from another
@@ -177,7 +177,8 @@ Voorkeuren van dit huishouden (houd er rekening mee, bijv. bij merk of soort):
 ${memory(b.memory)}
 
 Neem per product en winkel de gangbare, voordeligste variant die past (huismerk mag), tenzij het product een merk, soort of hoeveelheid noemt. Is er deze week een aanbieding voor, gebruik dan de actieprijs en zet de actie in "deal" en de laatste geldige dag in "until" (JJJJ-MM-DD). Gebruik alleen prijzen die je echt gevonden hebt; vind je een prijs niet, laat die winkel bij dat product weg. Verzin niets.
-Per prijs: "i" (nummer van het product), "store" (naam van de winkel), "product" (wat je vond, met hoeveelheid), "price" (zoals "€1,09" of "2 voor €3,49"), "deal" (of een lege string), "until" (of een lege string).`;
+Prijzen worden per kilo, liter of stuk vergeleken: noem bij elk product de inhoud van de verpakking. Neem waar het kan een vergelijkbare verpakking (bijv. overal 10 of 12 eieren, overal 1 liter).
+Per prijs: "i" (nummer van het product), "store" (naam van de winkel), "product" (wat je vond, met hoeveelheid), "size" (inhoud van de verpakking, zoals "6 stuks", "1 l", "500 g"), "price" (zoals "€1,09" of "2 voor €3,49"), "deal" (of een lege string), "until" (of een lege string).`;
 }
 
 /** Supermarket offers near a place, found with Google Search (grounding). */

@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { BadgePercent, Check, ChevronRight, Plus, Repeat2, ShoppingCart, Sparkles, Store } from 'lucide-react';
-import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem, repeatLabel, cheapest, euro, splitByStore } from '../lib/domain';
+import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem, repeatLabel, cheapest, euro, splitByStore, unitLabel, unitPrice } from '../lib/domain';
 import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem, priceStores } from '../data/actions';
 import { setS, useStore } from '../store/useStore';
 import type { CatId, Item, List, PlanQuestions } from '../types';
@@ -206,7 +206,7 @@ function ItemRow({ item: i, kind, at }: { item: Item; kind: 'shop' | 'todo'; at?
   if (i.urgent && !i.done) subs.push(<span key="u" className="flag">Dringend</span>);
   // What it costs, and where cheapest (on a trip: at this shop).
   const best = kind === 'shop' && !i.done ? cheapest(i.prices, at) : null;
-  if (best) subs.push(<span key="p" className={`flag ${best.deal ? 'offer-flag' : 'price-flag'}`} title={`${best.product} · ${best.price}${best.deal ? ` (${best.deal})` : ''}`}>{best.deal ? '% ' : ''}{best.price}{best.deal ? ` ${best.deal}` : ''}{at ? '' : ` · ${best.store}`}</span>);
+  if (best) subs.push(<span key="p" className={`flag ${best.deal ? 'offer-flag' : 'price-flag'}`} title={`${best.product} · ${best.price}${best.deal ? ` (${best.deal})` : ''}`}>{best.deal ? '% ' : ''}{best.price}{unitPrice(best) ? ` (${unitLabel(unitPrice(best)!)})` : ''}{best.deal ? ` ${best.deal}` : ''}{at ? '' : ` · ${best.store}`}</span>);
   if (offer && !best) subs.push(<span key="o" className="flag offer-flag" title={`${o2s(offer)}`}>% {offer.deal || 'Aanbieding'} · {offer.store}</span>);
   if (kind === 'todo' && i.due && !i.done) { const d = dueInfo(i.due); subs.push(<span key="d" className={`flag ${d.late ? 'late' : d.soon ? '' : 'calm'}`}>{d.label}</span>); }
   if (kind === 'todo' && i.repeat) subs.push(<span key="r" className="flag calm"><Repeat2 size={12} style={{ verticalAlign: -2, marginRight: 3 }} />{repeatLabel(i.repeat)}</span>);

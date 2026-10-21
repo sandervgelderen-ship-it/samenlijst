@@ -1,6 +1,6 @@
 /** Turn whatever the AI server returned into safe, bounded data the app can store. */
 import type { CatId, Item, ItemPrice, Offer, Plan, PlanAnswer, PlanQuestion } from '../types';
-import { cap, guessCat, isCat, isRule, kbKey, parseEuro, sameStore } from './domain';
+import { cap, guessCat, isCat, isRule, kbKey, parseEuro, sameStore, sortPrices } from './domain';
 
 const str = (v: unknown, n: number) => String(v == null ? '' : v).trim().slice(0, n);
 const arr = (d: unknown): unknown[] => {
@@ -196,11 +196,12 @@ export function cleanPrices(data: unknown, count: number): Record<number, ItemPr
     const store = cap(str(r.store, 40)), price = str(r.price, 30);
     const amount = parseEuro(price);
     if (!store || !price || amount == null || amount <= 0 || amount > 1000) continue;
-    const p: ItemPrice = { store, product: str(r.product, 100), price, amount, deal: str(r.deal, 60), until: isoDate(r.until) };
+    const size = str(r.size, 30);
+    const p: ItemPrice = { store, product: str(r.product, 100), price, amount, deal: str(r.deal, 60), until: isoDate(r.until), ...(size ? { size } : {}) };
     const list = (out[i] ||= []);
     const same = list.findIndex(x => sameStore(x.store, store));
-    if (same < 0) list.push(p); else if (amount < list[same].amount!) list[same] = p;
+    if (same < 0) list.push(p); else if (sortPrices([p, list[same]])[0] === p) list[same] = p;
   }
-  for (const k of Object.keys(out)) out[+k].sort((a, b) => a.amount! - b.amount!);
+  for (const k of Object.keys(out)) out[+k] = sortPrices(out[+k]);
   return out;
 }

@@ -542,3 +542,4 @@ img { max-width: 100%; }
 .prices .prow b { font-variant-numeric: tabular-nums; min-width: 64px; }
 .prices .prow .note { margin-left: auto; text-align: right; }
 .prices .prow.best b { color: var(--c-munt-fg); }
+.prices .prow .per { display: block; font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
