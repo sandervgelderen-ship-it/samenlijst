@@ -40,13 +40,13 @@ export default function AdminView() {
     loadFeedback().then(x => { if (live) setItems(x); }).catch(e => {
       console.warn('Meldingen laden', e);
       if (live) setProblem((e as { code?: string }).code === 'permission-denied'
-        ? 'Firebase geeft geen toegang tot de meldingen. Staan de nieuwste Samenlijst-regels al in Firestore?'
+        ? 'Firebase geeft geen toegang tot de meldingen. Staan de nieuwste IsErNog-regels al in Firestore?'
         : 'De meldingen konden niet worden geladen. Controleer je verbinding.');
     });
     return () => { live = false; };
   }, [admin, tick]);
 
-  if (!admin) return <div className="empty"><strong>Alleen voor de beheerder</strong>Deze pagina is er alleen voor wie Samenlijst beheert.</div>;
+  if (!admin) return <div className="empty"><strong>Alleen voor de beheerder</strong>Deze pagina is er alleen voor wie IsErNog beheert.</div>;
 
   const patch = (id: string, p: Partial<Feedback>) => setItems(xs => (xs || []).map(x => (x.id === id ? { ...x, ...p } : x)));
   const count = (s: FeedbackStatus) => (items || []).filter(f => f.status === s).length;
@@ -68,7 +68,7 @@ export default function AdminView() {
       </div>
       <p className="note" style={{ margin: '0 0 12px' }}>
         Zet een melding met <b>Naar Claude</b> klaar, eventueel met een opmerking. Claude kijkt elke twee uur (tussen 8 en 21 uur),
-        voert de wijziging door in Samenlijst en zet de melding op afgehandeld met een notitie van wat er veranderde.
+        voert de wijziging door in IsErNog en zet de melding op afgehandeld met een notitie van wat er veranderde.
       </p>
       <div className="pacts" style={{ marginBottom: 14 }}>
         <div className="seg" role="group" aria-label="Welke meldingen">

@@ -87,12 +87,12 @@ export default function OffersSheet({ listId }: { listId: string }) {
 
       {!place ? (
         <>
-          <p className="note">Vul jullie woonplaats in bij Huishouden. Elke nacht zoekt Samenlijst dan de folders van de supermarkten daar door, en hier staan 's ochtends de aanbiedingen klaar.</p>
+          <p className="note">Vul jullie woonplaats in bij Huishouden. Elke nacht zoekt IsErNog dan de folders van de supermarkten daar door, en hier staan 's ochtends de aanbiedingen klaar.</p>
           <div className="actions"><span /><button type="button" className="btn" onClick={() => setS({ sheet: { kind: 'household' } })}>Woonplaats invullen</button></div>
         </>
       ) : !result ? (
         <>
-          <p className="note">Vannacht zoekt Samenlijst de aanbiedingen in {place}; morgenochtend staan ze hier.</p>
+          <p className="note">Vannacht zoekt IsErNog de aanbiedingen in {place}; morgenochtend staan ze hier.</p>
           {aiOn && !readOnly && !busy && <div className="actions"><span /><button type="button" className="btn ghost" onClick={() => void findOffers()}>Nu alvast zoeken</button></div>}
         </>
       ) : (
@@ -100,7 +100,7 @@ export default function OffersSheet({ listId }: { listId: string }) {
           <p className="note">
             {all.length
               ? <>{result.week ? <>{result.week} · </> : null}{all.length} aanbiedingen in {place}, bijgewerkt {when(result.at)}. Wat bij {list.name} past staat bovenaan.</>
-              : <>Geen geldige aanbiedingen gevonden in {place} ({when(result.at)}). Vannacht kijkt Samenlijst opnieuw.</>}
+              : <>Geen geldige aanbiedingen gevonden in {place} ({when(result.at)}). Vannacht kijkt IsErNog opnieuw.</>}
           </p>
           {stores.length > 1 && (
             <div className="aiex" role="group" aria-label="Supermarkt">

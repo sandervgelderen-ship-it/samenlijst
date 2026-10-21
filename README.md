@@ -1,4 +1,6 @@
-# Samenlijst
+# IsErNog
+
+*Is er nog melk?* (Tot 21 oktober 2026 heette de app Samenlijst; de repo, de Firestore-collecties en de app-id heten nog zo.)
 
 Gedeelde boodschappen- en takenlijsten voor het hele huishouden. Gebouwd op dezelfde manier als Moestuin: React + Vite + Tailwind, Firebase voor inloggen en opslag, een Express-server met Gemini voor de slimme functies, en Capacitor voor de Android-app.
 
@@ -41,7 +43,7 @@ Overige scripts: `npm run lint` (types), `npm test` (lijstlogica), `npm run buil
 
 ## Firebase
 
-Samenlijst gebruikt **hetzelfde Firebase-project als Moestuin** (`firebase-applet-config.json`, `.firebaserc`). Een Moestuin-account werkt dus ook hier. De data staat in eigen collecties:
+IsErNog gebruikt **hetzelfde Firebase-project als Moestuin** (`firebase-applet-config.json`, `.firebaserc`). Een Moestuin-account werkt dus ook hier. De data staat in eigen collecties:
 
 | Pad | Inhoud |
 |---|---|
@@ -49,7 +51,7 @@ Samenlijst gebruikt **hetzelfde Firebase-project als Moestuin** (`firebase-apple
 | `samenlijstHouseholds/{id}/lists`, `/items`, `/kb` | lijsten, items en het geheugen (`kind: 'rule'`; oudere documenten zonder `kind` zijn losse items uit de vroegere kennisbank en worden niet meer gebruikt) |
 | `samenlijstInvites/{code}` | welke code bij welk huishouden hoort |
 
-**Let op bij de beveiligingsregels.** Een Firebase-project heeft één set regels. `firestore.rules` in deze repo bevat daarom de regels van Moestuin *plus* die van Samenlijst. Zet je regels live, doe dat met dit bestand (`firebase deploy --only firestore:rules`), en neem het Samenlijst-deel ook over in de Moestuin-repo, anders overschrijft een deploy vanuit Moestuin de Samenlijst-regels.
+**Let op bij de beveiligingsregels.** Een Firebase-project heeft één set regels. `firestore.rules` in deze repo bevat daarom de regels van Moestuin *plus* die van IsErNog. Zet je regels live, doe dat met dit bestand (`firebase deploy --only firestore:rules`), en neem het IsErNog-deel ook over in de Moestuin-repo, anders overschrijft een deploy vanuit Moestuin de IsErNog-regels.
 
 In de Firebase-console moeten **E-mail/wachtwoord** en **Google** aan staan onder Authentication (bij Moestuin al zo). Voor inloggen met Google op het web moet het domein van je server bij *Authorized domains* staan.
 

@@ -132,7 +132,7 @@ async function startRecording() {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { toast('Opnemen kan niet op dit apparaat.'); return; }
   let stream: MediaStream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { toast('Geef Samenlijst toegang tot de microfoon om een memo in te spreken.'); return; }
+  catch { toast('Geef IsErNog toegang tot de microfoon om een memo in te spreken.'); return; }
   const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'].find(t => MediaRecorder.isTypeSupported?.(t));
   const rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
   const s = { rec, stream, chunks: [] as Blob[], cancelled: false, started: Date.now() };

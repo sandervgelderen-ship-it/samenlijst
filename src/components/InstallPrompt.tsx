@@ -43,7 +43,7 @@ export function useInstall() {
   };
 }
 
-/** A friendly card on the home screen until Samenlijst is installed or the card is closed. */
+/** A friendly card on the home screen until IsErNog is installed or the card is closed. */
 export default function InstallPrompt() {
   const { installed, canPrompt, ios, install } = useInstall();
   const [hidden, setHidden] = useState(() => { try { return localStorage.getItem(KEY) === '1'; } catch { return false; } });
@@ -55,7 +55,7 @@ export default function InstallPrompt() {
       <button className="install-x" onClick={close} aria-label="Niet nu"><X size={18} /></button>
       <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" width={48} height={48} />
       <div className="install-txt">
-        <strong>Zet Samenlijst op je beginscherm</strong>
+        <strong>Zet IsErNog op je beginscherm</strong>
         {ios && steps
           ? <span>Tik onderin Safari op <Share size={14} style={{ display: 'inline', verticalAlign: '-2px' }} /> <b>Deel</b> en kies <b>Zet op beginscherm</b>.</span>
           : <span>Dan opent hij als een app, zonder adresbalk, en werkt hij ook zonder netwerk.</span>}

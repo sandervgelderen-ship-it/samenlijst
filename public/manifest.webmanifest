@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Samenlijst",
-  "short_name": "Samenlijst",
-  "description": "Gedeelde boodschappen- en takenlijsten voor het hele huishouden.",
+  "name": "Is er nog?",
+  "short_name": "IsErNog",
+  "description": "Is er nog melk? Gedeelde boodschappen- en takenlijsten voor het hele huishouden, met slimme hulp van Gemini.",
   "lang": "nl",
   "dir": "ltr",
   "start_url": "./",

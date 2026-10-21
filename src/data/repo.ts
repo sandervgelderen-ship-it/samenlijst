@@ -193,7 +193,7 @@ export async function renameHousehold(h: Household, name: string) {
   await updateDoc(doc(db, HH, h.id), { name: name.slice(0, 60) });
 }
 
-/** Woonplaats of the household: every night Samenlijst looks up the supermarket offers there. */
+/** Woonplaats of the household: every night IsErNog looks up the supermarket offers there. */
 export async function setHouseholdPlace(h: Household, place: string) {
   const p = place.trim().replace(/\s+/g, ' ').slice(0, 80);
   // A different place: last night's offers were for somewhere else.

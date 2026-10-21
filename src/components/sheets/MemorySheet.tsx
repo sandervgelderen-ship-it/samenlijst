@@ -39,7 +39,7 @@ export default function MemorySheet() {
   return (
     <Sheet label="Geheugen">
       <h3><span className="spk"><Brain /></span>Geheugen</h3>
-      <p className="note">Wat Samenlijst over jullie huishouden weet: voorkeuren en afspraken, geen losse boodschappen. Gemini houdt er rekening mee bij elk nieuw item, elk plan en elke suggestie.{aiOn ? ' Als je iets corrigeert, leidt Gemini er zelf een regel uit af.' : ''}</p>
+      <p className="note">Wat IsErNog over jullie huishouden weet: voorkeuren en afspraken, geen losse boodschappen. Gemini houdt er rekening mee bij elk nieuw item, elk plan en elke suggestie.{aiOn ? ' Als je iets corrigeert, leidt Gemini er zelf een regel uit af.' : ''}</p>
 
       {!readOnly && (
         <form className="memadd" onSubmit={submit}>
@@ -87,7 +87,7 @@ export default function MemorySheet() {
 
       {!readOnly && oldKb.length > 0 && (
         <div className="banner warn mem-old">
-          <span>De oude kennisbank bewaarde nog {oldKb.length} losse {oldKb.length === 1 ? 'item' : 'items'}. Die gebruikt Samenlijst niet meer.</span>
+          <span>De oude kennisbank bewaarde nog {oldKb.length} losse {oldKb.length === 1 ? 'item' : 'items'}. Die gebruikt IsErNog niet meer.</span>
           <button type="button" onClick={clearOldKb}>Opruimen</button>
         </div>
       )}

@@ -27,7 +27,7 @@ function AccessBanner() {
   return (
     <div className="banner warn" role="alert" style={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
       <span style={{ flex: '1 1 220px' }}>
-        <b>Firebase weigert op te slaan.</b> Waarschijnlijk ontbreken de Samenlijst-regels in Firestore,
+        <b>Firebase weigert op te slaan.</b> Waarschijnlijk ontbreken de IsErNog-regels in Firestore,
         bijvoorbeeld omdat Moestuin opnieuw is gepubliceerd. Zet ze terug via de Firebase-console › Firestore › Regels.
       </span>
       <button type="button" onClick={() => { setS({ access: null }); selectHousehold(S().hid); }}>Opnieuw proberen</button>
@@ -77,7 +77,7 @@ export default function Shell() {
           {inSub
             ? <button className="iconbtn" onClick={() => go('home')} aria-label="Terug naar alle lijsten"><ChevronLeft size={22} strokeWidth={2.4} /></button>
             : <Logo />}
-          <h1>{inList ? list!.name : inAdmin ? 'Beheer' : household?.name || 'Samenlijst'}</h1>
+          <h1>{inList ? list!.name : inAdmin ? 'Beheer' : household?.name || 'IsErNog'}</h1>
           {inAdmin ? <span style={{ width: 44 }} /> : inList
             ? !readOnly && <button className="iconbtn" onClick={() => setS({ sheet: { kind: 'list', id: list!.id } })} aria-label="Lijstinstellingen"><MoreHorizontal size={20} /></button>
             : <button className="iconbtn" onClick={() => setS({ sheet: { kind: 'household' } })} aria-label="Huishouden en instellingen"><Users size={19} /></button>}

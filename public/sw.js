@@ -1,4 +1,4 @@
-/* Samenlijst service worker: makes the web app installable and open instantly, also offline.
+/* IsErNog service worker: makes the web app installable and open instantly, also offline.
  * - Pages: network first, fall back to the cached app shell when offline.
  * - Built files (hashed names), fonts and icons: cache first, then refresh in the background.
  * - Firebase / Google APIs are never cached here; Firestore has its own offline cache. */

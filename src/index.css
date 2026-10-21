@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 /*
- * Samenlijst design tokens. Tailwind v4 is available for utilities (same setup as Moestuin);
+ * IsErNog design tokens. Tailwind v4 is available for utilities (same setup as Moestuin);
  * the app's components use the semantic classes below so the playful look stays in one place.
  */
 @theme {

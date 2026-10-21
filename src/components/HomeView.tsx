@@ -51,7 +51,7 @@ export default function HomeView() {
       {!readOnly && <NewList hasLists={lists.length > 0} />}
 
       <details className="tip" open={tipOpen} onToggle={e => setS({ tipOpen: (e.target as HTMLDetailsElement).open })}>
-        <summary>Zo werkt Samenlijst</summary>
+        <summary>Zo werkt IsErNog</summary>
         <ol>
           <li>Typ onderaan alles door elkaar, gescheiden door komma's: <em>melk, batterijen, tandarts bellen vrijdag</em>. Gemini analyseert elk item eerst: nette naam, aantal, afdeling, datum en op welke lijst het hoort.</li>
           <li>Of tik op de microfoon en spreek een memo in. Gemini schrijft het uit en verdeelt het over de lijsten.</li>

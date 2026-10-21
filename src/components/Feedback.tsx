@@ -53,7 +53,7 @@ function FeedbackSheet({ screenshot, context, onClose }: { screenshot: string | 
       console.warn('Melding versturen', e);
       const code = (e as { code?: string }).code;
       setProblem(code === 'permission-denied'
-        ? 'Firebase weigert de melding. De Samenlijst-regels in Firestore missen nog het deel voor meldingen.'
+        ? 'Firebase weigert de melding. De IsErNog-regels in Firestore missen nog het deel voor meldingen.'
         : (e as Error).message?.startsWith('De app') ? (e as Error).message : 'Versturen lukte niet. Probeer het opnieuw.');
     } finally { setBusy(false); }
   };
@@ -67,7 +67,7 @@ function FeedbackSheet({ screenshot, context, onClose }: { screenshot: string | 
             <h3><span className="spk"><MessageSquareWarning /></span>Bedankt!</h3>
             <p className="note" style={{ fontSize: '.98rem' }}>
               {result === 'verstuurd'
-                ? 'Je melding is binnen. Hij wordt bekeken en gebruikt om Samenlijst beter te maken.'
+                ? 'Je melding is binnen. Hij wordt bekeken en gebruikt om IsErNog beter te maken.'
                 : 'Er is nu geen verbinding. Je melding gaat vanzelf mee zodra je weer online bent; laat de app daarvoor even open.'}
             </p>
             <div className="actions"><span /><button type="button" className="btn" onClick={onClose}>Klaar</button></div>

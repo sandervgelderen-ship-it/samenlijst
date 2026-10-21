@@ -60,7 +60,7 @@ export default function Login() {
     <div className="welcome wrap">
       <div className="card">
         <Logo />
-        <h1>{mode === 'in' ? 'Welkom bij Samenlijst' : 'Maak een account'}</h1>
+        <h1>{mode === 'in' ? 'Welkom bij IsErNog' : 'Maak een account'}</h1>
         <p>Boodschappen en klusjes, samen bijgehouden. Heb je een Moestuin-account? Dan log je daarmee in.</p>
         {err && <div className="err" role="alert">{err}</div>}
         {info && <p className="note">{info}</p>}

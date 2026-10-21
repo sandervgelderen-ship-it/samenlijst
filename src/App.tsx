@@ -28,7 +28,7 @@ export default function App() {
   useEffect(() => { syncMemberInfo(); }, [user, households, hid]);
 
   let body;
-  if (!authReady || (user && !householdsLoaded)) body = <div className="state"><strong>Samenlijst</strong>Even laden…</div>;
+  if (!authReady || (user && !householdsLoaded)) body = <div className="state"><strong>IsErNog</strong>Even laden…</div>;
   else if (!user) body = <Login />;
   else if (!hid || !households.some(h => h.id === hid)) body = <HouseholdSetup />;
   else body = <Shell />;

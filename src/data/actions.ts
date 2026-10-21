@@ -32,7 +32,7 @@ export const memoryForAi = () => memoryLines(S().memory, S().lists);
 export function remember(text: string, opts: { topic?: string; list?: string | null; source?: Memory['source']; from?: string; quiet?: boolean } = {}): Memory | null {
   if (S().readOnly) return null;
   const body = makeMemory(text, S().memory, { topic: opts.topic, list: opts.list, listIds: listIds(), source: opts.source || 'zelf', from: opts.from, by: me() });
-  if (!body) { if (!opts.quiet) toast('Dat weet Samenlijst al.'); return null; }
+  if (!body) { if (!opts.quiet) toast('Dat weet IsErNog al.'); return null; }
   const id = newId('kb');
   const m: Memory = { ...body, id };
   setS({ memory: [m, ...S().memory] });
@@ -350,7 +350,7 @@ async function analyze(entries: Entry[], fixedList: string | null): Promise<Reco
 }
 
 export async function quickAddEntries(entries: Entry[], opts: { analyzed?: boolean } = {}) {
-  if (!S().lists.length) { toast('Maak eerst een lijst, dan weet Samenlijst waar dingen heen kunnen.'); return; }
+  if (!S().lists.length) { toast('Maak eerst een lijst, dan weet IsErNog waar dingen heen kunnen.'); return; }
   entries = entries.filter(p => p.key);
   if (!entries.length) return;
   const placed: Receipt[] = [], unsure: Pending[] = [];
@@ -641,7 +641,7 @@ export async function findOffers() {
     const result: OfferResult = { place: p, ...c, sources, searchHtml: (html || '').slice(0, 20000), at: Date.now() };
     if (!S().readOnly) write(() => updateDoc(hRef(h.id), { offers: result }));
     if (!c.offers.length) toast(`Geen aanbiedingen gevonden voor ${p}.`);
-    else if (missed.length) toast(`Bij ${missed.join(' en ')} lukte het zoeken niet; vannacht probeert Samenlijst het opnieuw.`);
+    else if (missed.length) toast(`Bij ${missed.join(' en ')} lukte het zoeken niet; vannacht probeert IsErNog het opnieuw.`);
   } catch (e) {
     toast((e as Error).message);
   } finally {
@@ -693,7 +693,7 @@ export async function lookupPrices(ids?: string[], opts: { quiet?: boolean } = {
       write(() => updateDoc(itemRef(i.id), { prices, pricesAt: now }));
     }
     if (!opts.quiet) toast(found.size ? `Prijzen gevonden voor ${found.size} van ${items.length} ${items.length === 1 ? 'item' : 'items'}` : 'Geen prijzen gevonden.');
-    if (failed && !opts.quiet) toast('Niet elke winkel lukte; vannacht probeert Samenlijst het opnieuw.');
+    if (failed && !opts.quiet) toast('Niet elke winkel lukte; vannacht probeert IsErNog het opnieuw.');
   } finally {
     setS({ pricesBusy: false });
   }

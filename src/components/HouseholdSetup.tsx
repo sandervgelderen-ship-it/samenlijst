@@ -6,7 +6,7 @@ import { Logo } from './bits';
 
 function explain(e: unknown, fallback: string) {
   const code = (e as { code?: string })?.code || '';
-  if (code === 'permission-denied') return 'Firebase weigert het opslaan: de beveiligingsregels van Samenlijst staan nog niet in Firebase (Firestore › Rules).';
+  if (code === 'permission-denied') return 'Firebase weigert het opslaan: de beveiligingsregels van IsErNog staan nog niet in Firebase (Firestore › Rules).';
   if (code === 'unavailable') return 'Geen verbinding met Firebase. Controleer je internet.';
   return (e as Error)?.message && !code ? (e as Error).message : fallback;
 }
@@ -33,7 +33,7 @@ export default function HouseholdSetup() {
       <div className="card">
         <Logo />
         <h1>Hoi {user?.name.split(' ')[0]}!</h1>
-        <p>Samenlijst werkt per huishouden: iedereen in het huishouden ziet dezelfde lijsten. Begin er een, of doe mee met de code die je van een huisgenoot kreeg.</p>
+        <p>IsErNog werkt per huishouden: iedereen in het huishouden ziet dezelfde lijsten. Begin er een, of doe mee met de code die je van een huisgenoot kreeg.</p>
         {err && <div className="err" role="alert">{err}</div>}
         <form onSubmit={create}>
           <label className="lbl2" htmlFor="hh-name">Nieuw huishouden</label>

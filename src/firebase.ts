@@ -4,7 +4,7 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Same Firebase project as Moestuin: one login for both apps.
-// Samenlijst keeps its data in its own top-level collections (samenlijstHouseholds, samenlijstInvites).
+// IsErNog keeps its data in its own top-level collections (samenlijstHouseholds, samenlijstInvites).
 setLogLevel('silent');
 
 export const app = initializeApp(firebaseConfig);

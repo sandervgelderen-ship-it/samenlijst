@@ -33,7 +33,7 @@ export default function HouseholdSheet() {
   if (!h || !user) return null;
 
   async function copy() {
-    const text = `Doe mee met "${h!.name}" in Samenlijst. Log in en vul deze code in: ${h!.inviteCode}`;
+    const text = `Doe mee met "${h!.name}" in IsErNog. Log in en vul deze code in: ${h!.inviteCode}`;
     try { await navigator.clipboard.writeText(text); toast('Uitnodiging gekopieerd. Plak hem in een appje.'); }
     catch { toast(`De code is ${h!.inviteCode}`); }
   }
@@ -52,8 +52,8 @@ export default function HouseholdSheet() {
       <label>Woonplaats
         <input className="field" id="hh-place" value={place} maxLength={80} placeholder="Bijv. Castricum" autoComplete="address-level2"
           onChange={e => setPlace(e.target.value)}
-          onBlur={() => place.trim() !== (h.place || '') && run(() => setHouseholdPlace(h, place), place.trim() ? 'Woonplaats bewaard. Vannacht zoekt Samenlijst de aanbiedingen.' : undefined)} />
-        <span className="note">Elke nacht zoekt Samenlijst de supermarktaanbiedingen in deze plaats.</span>
+          onBlur={() => place.trim() !== (h.place || '') && run(() => setHouseholdPlace(h, place), place.trim() ? 'Woonplaats bewaard. Vannacht zoekt IsErNog de aanbiedingen.' : undefined)} />
+        <span className="note">Elke nacht zoekt IsErNog de supermarktaanbiedingen in deze plaats.</span>
       </label>
       {(h.place || '').trim() && (
         <div style={{ display: 'grid', gap: 8 }}>
@@ -71,7 +71,7 @@ export default function HouseholdSheet() {
 
       <div style={{ display: 'grid', gap: 8 }}>
         <span className="lbl2">Huisgenoot uitnodigen</span>
-        <p className="note">Laat je huisgenoot Samenlijst openen, inloggen en deze code invullen.</p>
+        <p className="note">Laat je huisgenoot IsErNog openen, inloggen en deze code invullen.</p>
         <div className="code" aria-label="Uitnodigingscode">{h.inviteCode}</div>
         <div className="pacts">
           <button type="button" className="chip" onClick={copy}><Copy size={14} /> Kopieer uitnodiging</button>
@@ -119,7 +119,7 @@ export default function HouseholdSheet() {
         <div style={{ display: 'grid', gap: 8 }}>
           <span className="lbl2">App</span>
           {inst.canPrompt
-            ? <button type="button" className="chip" style={{ width: 'fit-content' }} onClick={() => inst.install()}>Installeer Samenlijst op dit apparaat</button>
+            ? <button type="button" className="chip" style={{ width: 'fit-content' }} onClick={() => inst.install()}>Installeer IsErNog op dit apparaat</button>
             : <p className="note">Op iPhone: tik in Safari op Deel en kies Zet op beginscherm.</p>}
         </div>
       )}

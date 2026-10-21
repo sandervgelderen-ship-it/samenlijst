@@ -138,7 +138,7 @@ ${target}
 export function learnPrompt(b: any) {
   const lists = (Array.isArray(b.lists) ? b.lists : []).slice(0, 20);
   const events = (Array.isArray(b.events) ? b.events : []).slice(0, 6);
-  return `Je beheert het geheugen van Samenlijst, de gedeelde lijsten-app van een Nederlands huishouden.
+  return `Je beheert het geheugen van IsErNog, de gedeelde lijsten-app van een Nederlands huishouden.
 Het geheugen bevat alleen algemene voorkeuren en afspraken over het huishouden (metadata), nooit losse producten of taken.
 Goed: "Schoonmaakproducten moeten ecologisch zijn", "Klusspullen horen op de lijst Klussen", "Dierenvoer kopen we bij de dierenwinkel", "Plantaardige melk hoort bij Zuivel & eieren", "Feestjes met een klein budget".
 Fout: "Toiletreiniger", "Melk staat op Boodschappen", "Plinten plaatsen".

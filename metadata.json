@@ -1,5 +1,5 @@
 {
-  "name": "Samenlijst",
+  "name": "IsErNog",
   "description": "Gedeelde boodschappen- en takenlijsten voor het hele huishouden, met snel toevoegen, een lerende kennisbank en taken die Gemini voor je uitwerkt.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

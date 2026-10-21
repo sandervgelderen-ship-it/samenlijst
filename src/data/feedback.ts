@@ -139,7 +139,7 @@ export function feedbackAsText(f: Feedback): string {
   const c = f.context || {};
   const screens = Array.isArray(c.screens) ? c.screens : [];
   const lines = [
-    `Samenlijst-melding ${f.id} van ${f.email ?? f.name ?? f.uid} op ${time(f.createdAt)} (UTC)`,
+    `IsErNog-melding ${f.id} van ${f.email ?? f.name ?? f.uid} op ${time(f.createdAt)} (UTC)`,
     '',
     'Wat er geschreven werd:',
     f.text.trim() || '(niets ingevuld)',

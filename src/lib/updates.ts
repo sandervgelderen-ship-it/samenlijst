@@ -13,7 +13,7 @@ let offered = false;
 function offer() {
   if (offered) return;
   offered = true;
-  toast('Er is een nieuwe versie van Samenlijst', 'Vernieuwen', () => location.reload(), 600_000);
+  toast('Er is een nieuwe versie van IsErNog', 'Vernieuwen', () => location.reload(), 600_000);
 }
 
 export async function checkForUpdate() {
