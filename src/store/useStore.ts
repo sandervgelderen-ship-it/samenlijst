@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Household, Item, List, ListKind, Memory, Pending, Receipt, StoreAsk } from '../types';
+import type { Household, Item, List, ListKind, Memory, Pending, Receipt, StoreAsk, SupplyAsk } from '../types';
 
 export interface AppUser {
   uid: string;
@@ -61,6 +61,8 @@ interface State {
   pending: Pending[];
   /** "Waar koop je dit?" questions for groceries that may not come from the supermarket. */
   storeAsks: StoreAsk[];
+  /** "Is er nog…?" for the supplies a new or returning task uses up. */
+  supplyAsks: SupplyAsk[];
   receipt: Receipt[];
   qaThinking: number;
   planning: string[];
@@ -114,6 +116,7 @@ export const useStore = create<State>()((set) => ({
   toast: null,
   pending: [],
   storeAsks: [],
+  supplyAsks: [],
   receipt: [],
   qaThinking: 0,
   planning: [],

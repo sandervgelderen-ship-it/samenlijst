@@ -205,3 +205,18 @@ export function cleanPrices(data: unknown, count: number): Record<number, ItemPr
   for (const k of Object.keys(out)) out[+k] = sortPrices(out[+k]);
   return out;
 }
+
+/** One thing a task uses up ("Hooi" for cleaning the rabbit hutch), to check whether it is still there. */
+export interface Supply { text: string; qty: string; cat: CatId | null; store: string; onList: boolean }
+
+/** Supplies for a task: at most 5, no doubles; the ones already on a shopping list are marked. */
+export function cleanSupplies(data: unknown, open: Pick<Item, 'text'>[]): Supply[] {
+  const have = new Set(open.map(i => kbKey(i.text))), seen = new Set<string>(), out: Supply[] = [];
+  for (const raw of arr(data)) {
+    const r = obj(raw); if (!r) continue;
+    const text = cap(str(r.text, 60)); const k = kbKey(text); if (!k || seen.has(k)) continue; seen.add(k);
+    out.push({ text, qty: str(r.qty, 24), cat: isCat(r.cat) ? r.cat : guessCat(text), store: str(r.store, 30), onList: have.has(k) });
+    if (out.length >= 5) break;
+  }
+  return out;
+}

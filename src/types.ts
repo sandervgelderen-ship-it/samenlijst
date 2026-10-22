@@ -200,3 +200,11 @@ export interface OfferResult {
   searchHtml: string;
   at: number;
 }
+
+/** "Is er nog hooi?": supplies a task uses up, asked when the task is added or comes back. */
+export interface SupplyAsk {
+  aid: string;
+  taskId: string;
+  task: string;
+  items: { text: string; qty: string; cat: CatId | null; store: string; onList: boolean }[];
+}

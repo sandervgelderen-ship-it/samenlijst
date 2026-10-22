@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { aiConfigured, generateGrounded, generateJSON } from '../services/genai';
 import {
-  analyzePrompt, elaboratePrompt, questionsPrompt, forgotPrompt, learnPrompt, offersPrompt, pricesPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
-  PRICES_SHAPE, ANALYZE_SCHEMA, LEARN_SCHEMA, PLAN_SCHEMA, QUESTIONS_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, TODO_SCHEMA,
+  analyzePrompt, elaboratePrompt, questionsPrompt, forgotPrompt, learnPrompt, offersPrompt, pricesPrompt, routePrompt, smartAddPrompt, sortPrompt, suppliesPrompt, voicePrompt,
+  PRICES_SHAPE, ANALYZE_SCHEMA, LEARN_SCHEMA, PLAN_SCHEMA, QUESTIONS_SCHEMA, VOICE_SCHEMA, ROUTE_SCHEMA, SHOP_SCHEMA, SORT_SCHEMA, SUPPLIES_SCHEMA, TODO_SCHEMA,
 } from '../prompts';
 
 export const aiRouter = Router();
@@ -53,6 +53,11 @@ aiRouter.post('/questions', asyncHandler(async (req, res) => {
 /** Werk een taak uit (met de antwoorden): toelichting, stappen, tips en wat je moet kopen. */
 aiRouter.post('/elaborate', asyncHandler(async (req, res) => {
   res.json(await generateJSON(elaboratePrompt(req.body || {}), PLAN_SCHEMA));
+}));
+
+/** "Is er nog…?": the supplies a task uses up. */
+aiRouter.post('/supplies', asyncHandler(async (req, res) => {
+  res.json(await generateJSON(suppliesPrompt(req.body || {}), SUPPLIES_SCHEMA));
 }));
 
 /** Spraakmemo: audio -> transcript + items. */

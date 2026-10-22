@@ -1,7 +1,7 @@
 /** Run with: npm test. Checks the list logic that quick add depends on. */
 import assert from 'node:assert/strict';
-import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem, parseRepeat, nextDue, repeatLabel, parseEuro, cheapest, splitByStore, sameStore, parseSize, unitPrice, sortPrices } from '../src/lib/domain';
-import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules, mergeOffers } from '../src/lib/aiClean';
+import { parseEntry, parseDue, guessCat, prepEntry, route, splitEntries, kbKey, normStore, isSuper, decideStore, storeOptions, pickCat, knownStore, parseRemember, isRule, makeMemory, memoryLines, liveOffers, offerItem, parseRepeat, nextDue, repeatLabel, parseEuro, cheapest, splitByStore, sameStore, parseSize, unitPrice, sortPrices, isOnline, orderTask, isBulkDeal, stockUpOffers, usualBuys, andJoin } from '../src/lib/domain';
+import { cleanAnalysis, cleanOffers, cleanQuestions, cleanRules, cleanSupplies, mergeOffers } from '../src/lib/aiClean';
 import type { Item, List } from '../src/types';
 
 const now = new Date('2026-10-17T09:00:00'); // a Saturday
@@ -154,6 +154,29 @@ t('aanbiedingen: winkels in gekozen volgorde, alleen met resultaat', () => asser
 t('aanbiedingen: passend bij de lijst eerst, alles erin', () => assert.deepEqual([merged.offers[0].product, merged.offers.length, merged.week], ['Melk', 4, '19 t/m 25 oktober']));
 const many = mergeOffers(['Albert Heijn', 'Vomar', 'Lidl'].map(st => cleanOffers({ offers: Array.from({ length: 40 }, (_, n) => ({ store: st, product: `${st} ${n}`, deal: '1+1' })) })), ['Albert Heijn', 'Vomar', 'Lidl']);
 t('aanbiedingen: om de beurt per winkel, niemand valt weg', () => assert.deepEqual([many.offers.slice(0, 3).map(o => o.store), many.offers.filter(o => o.store === 'Lidl').length > 25], [['Albert Heijn', 'Vomar', 'Lidl'], true]));
+
+// Online bestellen is een taak
+t('online: bol.com en webshop zijn online', () => assert.deepEqual([isOnline('bol.com'), isOnline('Webshop'), isOnline('Supermarkt'), isOnline(null)], [true, true, false, false]));
+t('online: taak "… bestellen", aantal in de notitie', () => assert.deepEqual(orderTask('hooi', '2 balen'), { text: 'Hooi bestellen', note: '2 balen, online' }));
+t('online: geen dubbel bestellen', () => assert.equal(orderTask('Printerinkt online bestellen').text, 'Printerinkt bestellen'));
+
+// Voorraad inslaan
+t('inslaan: meer voor minder telt', () => assert.deepEqual(['1+1 gratis', '2e halve prijs', '3 voor €5', '25% korting', 'Voordeelverpakking'].map(isBulkDeal), [true, true, true, true, true]));
+t('inslaan: kleine korting of niets telt niet', () => assert.deepEqual(['10% korting', '', 'Weekactie'].map(isBulkDeal), [false, false, false]));
+const stockOffers = [
+  { product: 'Page toiletpapier 24 rollen', match: '', deal: '1+1 gratis' },
+  { product: 'Halfvolle melk', match: 'Melk', deal: '2e halve prijs' },
+  { product: 'Wasmiddel', match: '', deal: '10% korting' },
+  { product: 'Chips paprika', match: '', deal: '2+1 gratis' },
+];
+const stock = stockUpOffers(stockOffers, ['Toiletpapier', 'Wasmiddel', 'Melk'], [{ text: 'Melk' }]);
+t('inslaan: alleen wat jullie vaker kopen, niet al op de lijst, met scherpe actie', () => assert.deepEqual(stock.map(x => [x.offer.product, x.usual]), [['Page toiletpapier 24 rollen', 'Toiletpapier']]));
+t('inslaan: gewoonlijk gekocht, niet nu op de lijst', () => assert.deepEqual(usualBuys([{ kind: 'shop', recent: ['Melk', 'Hooi', 'melk'] }, { kind: 'todo', recent: ['Stofzuigen'] }], ['Hooi']), ['Melk']));
+
+// Is er nog…?
+const sup = cleanSupplies({ items: [{ text: 'hooi', qty: '1 baal', cat: 'overig', store: 'Dierenwinkel' }, { text: 'Stro' }, { text: 'Hooi' }, { text: '' }] }, [{ text: 'Stro' }]);
+t('is er nog: opgeschoond, dubbel eruit, wat al op de lijst staat gemarkeerd', () => assert.deepEqual(sup.map(x => [x.text, x.qty, x.store, x.onList]), [['Hooi', '1 baal', 'Dierenwinkel', false], ['Stro', '', '', true]]));
+t('is er nog: hooi, stro en houtkorrels', () => assert.deepEqual([andJoin(['hooi']), andJoin(['hooi', 'stro', 'houtkorrels'])], ['hooi', 'hooi, stro en houtkorrels']));
 
 if (failed) { console.log(`\n${failed} test(s) mislukt`); process.exit(1); }
 console.log('\nAlle tests geslaagd');

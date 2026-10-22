@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { BadgePercent, Check, Plus, RefreshCw, Search, Store as StoreIcon, StickyNote } from 'lucide-react';
-import { CHAINS, dueInfo, liveOffers, offerItem, todayISO } from '../../lib/domain';
+import { BadgePercent, Check, PackagePlus, Plus, RefreshCw, Search, Store as StoreIcon, StickyNote } from 'lucide-react';
+import { CHAINS, dueInfo, liveOffers, offerItem, stockUpOffers, todayISO } from '../../lib/domain';
 import { addItem, findOffers, listItems, lookupPrices, updateItem } from '../../data/actions';
 import { setS, useStore } from '../../store/useStore';
 import type { Offer } from '../../types';
@@ -44,19 +44,23 @@ export default function OffersSheet({ listId }: { listId: string }) {
   const all = liveOffers(result?.offers);
   const shown = all.filter(o => !store || o.store === store);
   const forList = shown.filter(o => offerItem(o, open));
-  const others = shown.filter(o => !offerItem(o, open));
+  // Voorraad inslaan: a sharp multi-buy deal on something you buy anyway, not needed right now.
+  const history = [...listItems(listId).filter(i => i.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)).map(i => i.text), ...(list.recent || [])];
+  const stock = stockUpOffers(shown, history, open);
+  const others = shown.filter(o => !offerItem(o, open) && !stock.some(x => x.offer === o));
   const stores = (result?.stores || []).filter(s => all.some(o => o.store === s));
   const keyOf = (o: Offer) => o.store + '|' + o.product;
   const label = (o: Offer) => `${o.deal || 'Aanbieding'}${o.price ? ` ${o.price}` : ''} bij ${o.store}`.slice(0, 140);
 
-  function use(o: Offer) {
+  function use(o: Offer, usual?: string) {
     const it = offerItem(o, open);
     if (it) updateItem(it.id, { note: label(o) });
+    else if (usual) addItem(listId, usual, { note: `Voorraad: ${label(o)}`.slice(0, 140), cat: o.cat, quiet: true });
     else addItem(listId, o.product, { note: label(o), cat: o.cat, quiet: true });
     setDone(new Set(done).add(keyOf(o)));
   }
 
-  const row = (o: Offer) => {
+  const row = (o: Offer, usual?: string) => {
     const it = offerItem(o, open), used = done.has(keyOf(o));
     const until = o.until ? dueInfo(o.until) : null;
     return (
@@ -70,10 +74,11 @@ export default function OffersSheet({ listId }: { listId: string }) {
             {until && <span>t/m {until.label.toLowerCase()}</span>}
           </span>
           {it && <span className="sub">Voor <b>{it.text}</b> op je lijst</span>}
+          {usual && <span className="sub">Jullie kopen vaker <b>{usual.toLowerCase()}</b></span>}
         </span>
         {!readOnly && (
-          <button type="button" className="chip" disabled={used} onClick={() => use(o)} aria-label={it ? `Zet de aanbieding bij ${it.text}` : `Zet ${o.product} op de lijst`}>
-            {used ? <><Check size={14} /> Gedaan</> : it ? <><StickyNote size={14} /> Noteer</> : <><Plus size={14} /> Op lijst</>}
+          <button type="button" className="chip" disabled={used} onClick={() => use(o, usual)} aria-label={it ? `Zet de aanbieding bij ${it.text}` : usual ? `Sla ${usual} in` : `Zet ${o.product} op de lijst`}>
+            {used ? <><Check size={14} /> Gedaan</> : it ? <><StickyNote size={14} /> Noteer</> : usual ? <><PackagePlus size={14} /> Sla in</> : <><Plus size={14} /> Op lijst</>}
           </button>
         )}
       </div>
@@ -108,8 +113,9 @@ export default function OffersSheet({ listId }: { listId: string }) {
               {stores.map(s => <button key={s} type="button" className="chip" aria-pressed={store === s} onClick={() => setStore(store === s ? null : s)}>{s}</button>)}
             </div>
           )}
-          {forList.length > 0 && <><p className="lbl2">Voor je lijst</p><div className="kbrows">{forList.map(row)}</div></>}
-          {others.length > 0 && <><p className="lbl2">{forList.length ? 'Meer aanbiedingen' : 'Aanbiedingen'}</p><div className="kbrows">{others.map(row)}</div></>}
+          {forList.length > 0 && <><p className="lbl2">Voor je lijst</p><div className="kbrows">{forList.map(o => row(o))}</div></>}
+          {stock.length > 0 && <><p className="lbl2">Voorraad inslaan</p><p className="note">Nu niet nodig, maar wel scherp geprijsd en iets wat jullie vaker kopen.</p><div className="kbrows">{stock.map(x => row(x.offer, x.usual))}</div></>}
+          {others.length > 0 && <><p className="lbl2">{forList.length || stock.length ? 'Meer aanbiedingen' : 'Aanbiedingen'}</p><div className="kbrows">{others.map(o => row(o))}</div></>}
           <p className="note">Gevonden door Gemini met Google; prijzen en voorwaarden kunnen afwijken, check de folder.</p>
           {result.sources.length > 0 && (
             <p className="note offer-src">Bronnen: {result.sources.map((x, n) => <span key={x.uri}>{n > 0 && ' · '}<a href={x.uri} target="_blank" rel="noopener noreferrer">{x.title}</a></span>)}</p>

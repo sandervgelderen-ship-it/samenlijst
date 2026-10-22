@@ -7,7 +7,7 @@
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { app } from '../firebase';
 import {
-  analyzePrompt, elaboratePrompt, forgotPrompt, learnPrompt, OFFERS_SHAPE, offersPrompt, PRICES_SHAPE, pricesPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, voicePrompt,
+  analyzePrompt, elaboratePrompt, forgotPrompt, learnPrompt, OFFERS_SHAPE, offersPrompt, PRICES_SHAPE, pricesPrompt, questionsPrompt, routePrompt, smartAddPrompt, sortPrompt, suppliesPrompt, voicePrompt,
 } from '../server/prompts';
 import { groundingSources, parseLoose } from '../lib/aiClean';
 
@@ -54,6 +54,7 @@ const SHAPE: Record<string, string> = {
   'route-items': '[{"i":0,"list":"<lijst-id>","confidence":0.9}]',
   'learn': '{"rules":[{"text":"Schoonmaakproducten moeten ecologisch zijn","topic":"Schoonmaak","list":""}]}',
   'offers': OFFERS_SHAPE,
+  'supplies': '{"items":[{"text":"Hooi","qty":"1 baal","cat":"overig","store":"Dierenwinkel"}]}',
 };
 
 function media(dataUrl: unknown, kind: 'image' | 'audio') {
@@ -73,6 +74,7 @@ export async function runLocal(path: string, body: any): Promise<unknown> {
     case 'sort-aisles': prompt = sortPrompt(body); break;
     case 'route-items': prompt = routePrompt(body); break;
     case 'learn': prompt = learnPrompt(body); break;
+    case 'supplies': prompt = suppliesPrompt(body); break;
     case 'offers': return offers(body);
     case 'prices': return prices(body);
     case 'smart-add':

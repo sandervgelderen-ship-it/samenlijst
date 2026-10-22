@@ -38,6 +38,8 @@ export const COMMON = ['Melk', 'Brood', 'Eieren', 'Kaas', 'Boter', 'Bananen', 'A
 /* ---------- Text helpers ---------- */
 export const norm = (s: string) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
 export const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+/** "hooi, stro en houtkorrels" */
+export const andJoin = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} en ${xs[xs.length - 1]}`);
 export const kbKey = (text: string) => norm(String(text || '')).replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, ' ').trim();
 
 export function guessCat(text: string): CatId {
@@ -329,6 +331,13 @@ export function normStore(s: unknown): string | null {
   return cap(t);
 }
 export const isSuper = (store: string | null | undefined) => !store || normStore(store) === SUPERMARKT;
+/** Bought online (webshop, bol.com): that is something to order, a task, not a grocery. */
+export const isOnline = (store: string | null | undefined) => normStore(store) === 'Online';
+/** The task for something you order online: "Hooi" becomes "Hooi bestellen" (the amount goes in the note). */
+export function orderTask(text: string, qty = ''): { text: string; note: string } {
+  const t = cap(String(text || '').trim().replace(/\s+(online\s+)?(bestellen|kopen)$/i, ''));
+  return { text: `${t} bestellen`.slice(0, 120), note: [qty.trim(), 'online'].filter(Boolean).join(', ') };
+}
 
 /**
  * Where an item is bought. What the household told us wins; then a confident AI; when the AI doubts
@@ -387,6 +396,42 @@ export function offerItem<T extends Pick<Item, 'text'>>(o: Pick<Offer, 'product'
     if (iw.length > bestLen && iw.every(has)) { best = i; bestLen = iw.length; }
   }
   return best;
+}
+
+/* ---------- Voorraad inslaan: a sharp deal on something you buy anyway ---------- */
+/** A deal worth buying ahead: more for less (1+1, 2e halve prijs, 3 voor €5, voordeelverpakking) or a big discount. */
+export function isBulkDeal(deal: string | null | undefined): boolean {
+  const d = kbKey(String(deal || ''));
+  if (!d) return false;
+  if (/\d\s*\+\s*\d|\d+\s*(voor|halen)\b|\b(2e|3e|tweede|derde)\b|halve prijs|gratis|voordeel|bulk|stapel|grootverpakking|mega|xl\b/.test(d)) return true;
+  const pct = String(deal).match(/(\d{2})\s*%/);
+  return !!pct && Number(pct[1]) >= 25;
+}
+
+/** What the household usually buys (recent on its shopping lists) and is not on a list now: to look for deals to stock up. */
+export function usualBuys(lists: Pick<List, 'kind' | 'recent'>[], open: string[], max = 40): string[] {
+  const now = new Set(open.map(kbKey)), seen = new Set<string>(), out: string[] = [];
+  for (const l of lists) if (l.kind === 'shop') for (const t of l.recent || []) {
+    const k = kbKey(t); if (!k || now.has(k) || seen.has(k)) continue;
+    seen.add(k); out.push(t);
+  }
+  return out.slice(0, max);
+}
+
+/**
+ * Offers to stock up on: a bulk deal for something the household buys (it was on the list before), that is not
+ * on the list now. Each comes with the thing they usually buy ("Wc-papier"), most recent first.
+ */
+export function stockUpOffers<O extends Pick<Offer, 'product' | 'match' | 'deal'>>(offers: O[], usual: string[], open: Pick<Item, 'text'>[]): { offer: O; usual: string }[] {
+  const seen = new Set<string>();
+  const past = usual.filter(t => { const k = kbKey(t); if (!k || seen.has(k)) return false; seen.add(k); return true; }).map(text => ({ text }));
+  const out: { offer: O; usual: string }[] = [];
+  for (const o of offers) {
+    if (!isBulkDeal(o.deal) || offerItem(o, open)) continue;
+    const hit = offerItem({ product: o.product, match: '' }, past);
+    if (hit) out.push({ offer: o, usual: hit.text });
+  }
+  return out;
 }
 
 /* ---------- Prices: what an item costs where ---------- */

@@ -28,7 +28,7 @@ Analyseer elk item:
 - "cat": bij boodschappen de afdeling-id (${CAT_PROMPT}); bij taken een lege string.
 - "due": datum JJJJ-MM-DD als er een moment genoemd is, anders een lege string.
 - "repeat": bij taken die terugkomen hoe vaak, in woorden ("elke week", "elke 2 weken", "elke maandag", "elke maand"), ook als het in een bijzin staat ("het konijnenhok moet wekelijks"); anders een lege string. Haal het dan uit "text" en "note".
-- "store": bij boodschappen waar je dit in Nederland normaal koopt: "Supermarkt" als een gewone supermarkt (Albert Heijn, Jumbo) het verkoopt, anders het soort winkel, zoals "Drogist", "Bouwmarkt", "Tuincentrum", "Dierenwinkel", "Apotheek", "Slager", "Bakker", "Markt" of "Online". Noemt de gebruiker zelf een winkel, gebruik die. Bij taken een lege string.
+- "store": bij boodschappen waar je dit in Nederland normaal koopt: "Supermarkt" als een gewone supermarkt (Albert Heijn, Jumbo) het verkoopt, anders het soort winkel, zoals "Drogist", "Bouwmarkt", "Tuincentrum", "Dierenwinkel", "Apotheek", "Slager", "Bakker", "Markt" of "Online" (iets wat je normaal online bestelt, zoals via bol.com of een webshop; dat wordt een taak "… bestellen" op een takenlijst, niet een boodschap). Noemt de gebruiker zelf een winkel, gebruik die. Bij taken een lege string.
 - "storeConfidence": tussen 0 en 1 hoe zeker die winkel is. Hoog (0.9) voor gewone boodschappen als melk of brood. Laag (0.6 of minder) als het zowel in de supermarkt als elders te koop is of als je twijfelt, bijvoorbeeld stro, hooi, batterijen, een lamp, potgrond of vogelzaad.
 - "list": id van de lijst waar het hoort; "confidence" tussen 0 en 1, hoog alleen als het duidelijk is.
 Noemt één regel meerdere dingen ("melk en eieren"), geef dan per ding een object met hetzelfde "i". Verzin niets wat niet genoemd is, behalve wat uit de voorkeuren van het huishouden volgt.`;
@@ -120,6 +120,18 @@ Werk de klus zelf concreet uit, toegespitst op Nederland en op wat het huishoude
 - "buy": 0 tot 8 dingen die hiervoor gekocht moeten worden, met hoeveelheid ("qty"). Leeg als er niets te kopen is of het al in huis is.`;
 }
 
+/** "Is er nog hooi?": the supplies a task uses up, to check before you start. */
+export function suppliesPrompt(b: any) {
+  return `${taskContext(b)}
+Staat al op de boodschappenlijst: ${list(b.open, 60)}.
+Koopt dit huishouden vaker: ${list(b.usual, 40)}.
+
+Welke verbruiksspullen gaan er bij deze taak op, die je in huis moet hebben en af en toe moet aanvullen? Bijvoorbeeld bij "Konijnenhok schoonmaken": hooi, stro, houtkorrels; bij "Was draaien": wasmiddel; bij "Ramen lappen": glasreiniger.
+- Alleen dingen die echt bij deze taak opraken. Geen gereedschap of apparaten die je eenmalig koopt, en niets als de taak geen spullen gebruikt (tandarts bellen, pakket ophalen): geef dan een lege lijst.
+- Volg de voorkeuren van het huishouden (merk, soort, ecologisch, winkel). Staat iets passends al op de boodschappenlijst, neem het dan op met precies die naam.
+- 0 tot 5 items. Per item: "text" (kort, met hoofdletter, zonder aantal), "qty" (gangbare hoeveelheid om te kopen, zoals "1 baal", of een lege string), "cat" (afdeling-id: ${CAT_PROMPT}), "store" (waar je het normaal koopt: "Supermarkt", "Dierenwinkel", "Drogist", "Bouwmarkt", "Tuincentrum", enz.).`;
+}
+
 export function voicePrompt(b: any) {
   const lists = (Array.isArray(b.lists) ? b.lists : []).slice(0, 20);
   const target = b.target === 'shop' ? 'Alles gaat op één boodschappenlijst.' : b.target === 'todo' ? 'Alles gaat op één takenlijst.' : `Het huishouden heeft deze lijsten: ${lists.map((l: any) => `"${s(l.name, 60)}" (${l.kind === 'shop' ? 'boodschappen' : 'taken'})`).join(', ') || 'geen'}.`;
@@ -168,7 +180,7 @@ export function pricesPrompt(b: any) {
   const items = (Array.isArray(b.items) ? b.items : []).slice(0, 40);
   const lines = items.map((x: any, n: number) => `${n}: ${s(x.text, 100)}${x.qty ? ` (${s(x.qty, 24)})` : ''}${x.note ? ` – ${s(x.note, 80)}` : ''}${x.store ? ` [koop je bij: ${s(x.store, 30)}]` : ''}`).join('\n');
   const where = stores.length
-    ? `bij ${stores.length === 1 ? 'deze supermarkt' : 'elk van deze supermarkten'}: ${stores.join(', ')} (in of bij ${place}). Zoek op de eigen site van ${stores.length === 1 ? 'de keten' : 'elke keten'}.`
+    ? `bij ${stores.length === 1 ? 'deze supermarkt' : 'elk van deze supermarkten'}: ${stores.join(', ')} (in of bij ${place}). Zoek eerst op de eigen site of webshop van ${stores.length === 1 ? 'de keten' : 'elke keten'}. Staat de vaste prijs daar niet (Lidl en Aldi zetten lang niet alles online), zoek dan in de actuele folder en op prijsvergelijkers en boodschappensites die de prijzen van die keten tonen (bijv. Checkjebon, Supermarktaanbiedingen, Boodschappenvergelijker), met de naam van de keten erbij (bijv. "Lidl halfvolle melk prijs"). Lidl en Aldi verkopen vooral hun eigen merken (bijv. Milbona, Cien, W5 bij Lidl): zoek dan naar de huismerkvariant.`
     : `bij winkels van de soort tussen [ ] in of bij ${place} (bijv. de bouwmarkten, dierenwinkels of drogisterijen daar), hooguit 3 winkels per product.`;
   return `Zoek met Google Search wat deze producten nu kosten ${where} Vandaag is het ${s(b.today, 60)}.
 Producten (nummer: product):
@@ -193,7 +205,8 @@ export function offersPrompt(b: any) {
 ${step1}
 2. Zoek in hun actuele folders en bonuspagina's de aanbiedingen van deze week. Gebruik alleen aanbiedingen die je echt gevonden hebt; verzin niets en neem geen verlopen acties. Landelijke folderaanbiedingen van de keten gelden ook in ${place}.
 3. Geef voorrang aan aanbiedingen voor wat er op de boodschappenlijst staat: ${list(b.open, 60)}. Zet bij zo'n aanbieding in "match" het item van de lijst waar hij bij past.
-4. Vul aan met andere opvallende aanbiedingen van gewone boodschappen, tot hooguit ${max} in totaal${chosen.length > 1 ? ', verdeeld over de supermarkten' : ''}.
+4. Zoek ook voordeelacties om in te slaan (1+1 gratis, 2+1, 2e halve prijs, 3 voor €…, voordeelverpakking, 25% korting of meer) voor dingen die dit huishouden vaak koopt maar nu niet op de lijst heeft: ${list(b.usual, 40)}. Laat "match" daarbij leeg.
+5. Vul aan met andere opvallende aanbiedingen van gewone boodschappen, tot hooguit ${max} in totaal${chosen.length > 1 ? ', verdeeld over de supermarkten' : ''}.
 Voorkeuren van dit huishouden (houd er rekening mee):
 ${memory(b.memory)}
 
@@ -218,6 +231,11 @@ export const ANALYZE_SCHEMA = {
     properties: { i: { type: 'INTEGER' }, text: STR, qty: STR, note: STR, cat: STR, due: STR, repeat: STR, store: STR, storeConfidence: { type: 'NUMBER' }, list: STR, confidence: { type: 'NUMBER' } },
     required: ['i', 'text', 'list', 'confidence'],
   },
+};
+export const SUPPLIES_SCHEMA = {
+  type: 'OBJECT',
+  properties: { items: { type: 'ARRAY', items: { type: 'OBJECT', properties: { text: STR, qty: STR, cat: STR, store: STR }, required: ['text'] } } },
+  required: ['items'],
 };
 export const ROUTE_SCHEMA = {
   type: 'ARRAY',

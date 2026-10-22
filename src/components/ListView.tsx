@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BadgePercent, Check, ChevronRight, Plus, Repeat2, ShoppingCart, Sparkles, Store } from 'lucide-react';
 import { AISLE_COLOR, CAT_LABEL, CAT_ORDER, dueInfo, isSuper, liveOffers, normStore, offerItem, repeatLabel, cheapest, euro, splitByStore, unitLabel, unitPrice } from '../lib/domain';
 import { deleteItems, pickAnswer, planAddBuy, planAddSteps, queuePlan, removePlan, setExtra, setShopper, sortOverig, submitAnswers, togglePlanOpen, toggleItem, priceStores } from '../data/actions';
@@ -6,6 +6,7 @@ import { setS, useStore } from '../store/useStore';
 import type { CatId, Item, List, PlanQuestions } from '../types';
 import { Avatar, Doodle, useHousehold, useNames } from './bits';
 import StoreAsks from './StoreAsks';
+import SupplyAsks from './SupplyAsks';
 
 const SHOPPING_FOR = 3 * 3600e3;
 
@@ -31,6 +32,9 @@ export default function ListView({ list: l }: { list: List }) {
   const urgentFirst = (a: Item, b: Item) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0);
   // On a trip to chosen supermarkets the list is split per shop, each item where it is cheapest.
   const trip = l.kind === 'shop' && shopper && shopper.by === me && shopper.stores?.length ? shopper.stores : null;
+  // Things from other shops than the supermarket are shown apart; during a supermarket trip folded away.
+  const other = l.kind === 'shop' ? open.filter(i => !isSuper(i.store)) : [];
+  const [showOther, setShowOther] = useState(false);
 
   return (
     <>
@@ -69,6 +73,7 @@ export default function ListView({ list: l }: { list: List }) {
       </div>
 
       {l.kind === 'shop' && !readOnly && <StoreAsks listId={l.id} />}
+      {l.kind === 'todo' && !readOnly && <SupplyAsks listId={l.id} />}
 
       {ghosts.length > 0 && (
         <div className="items ghosts">
@@ -90,7 +95,7 @@ export default function ListView({ list: l }: { list: List }) {
         </div>
       ) : l.kind === 'shop' && trip ? (
         <>
-          {splitByStore(open, trip).map(([store, g]) => {
+          {splitByStore(open, trip).filter(([store]) => trip.includes(store)).map(([store, g]) => {
             const isTrip = trip.includes(store);
             const sum = isTrip ? g.reduce((t, i) => t + (cheapest(i.prices, [store])?.amount || 0), 0) : 0;
             return (
@@ -104,6 +109,21 @@ export default function ListView({ list: l }: { list: List }) {
               </section>
             );
           })}
+          {/* Not from the supermarket (bouwmarkt, dierenwinkel…): apart, and folded away during the trip. */}
+          {other.length > 0 && (
+            <button type="button" className="otherhead" aria-expanded={showOther} onClick={() => setShowOther(!showOther)}>
+              <span>Andere winkels</span><span>{other.length} {other.length === 1 ? 'item' : 'items'} · {showOther ? 'verberg' : 'toon'}</span>
+            </button>
+          )}
+          {showOther && splitByStore(open, trip).filter(([store]) => !trip.includes(store)).map(([store, g]) => (
+            <section className="group" key={'t-' + store}>
+              <h2>
+                <span className="aisle"><Store size={15} style={{ color: 'var(--c-druif-fg)' }} />Bij de {store.toLowerCase()}</span>
+                <span>{g.length}</span>
+              </h2>
+              <div className="items">{g.sort((a, b) => urgentFirst(a, b) || a.createdAt - b.createdAt).map(i => <ItemRow key={i.id} item={i} kind="shop" />)}</div>
+            </section>
+          ))}
           {!open.length && <div className="empty"><Doodle kind="done" /><strong>Alles in het mandje</strong>Wis de afgevinkte items als je klaar bent; ze blijven als suggestie bewaard.</div>}
         </>
       ) : l.kind === 'shop' ? (
@@ -120,7 +140,8 @@ export default function ListView({ list: l }: { list: List }) {
               <div className="items">{g.sort((a, b) => urgentFirst(a, b) || a.createdAt - b.createdAt).map(i => <ItemRow key={i.id} item={i} kind="shop" />)}</div>
             </section>
           ))}
-          {groupByStore(open.filter(i => !isSuper(i.store))).map(([store, g]) => (
+          {other.length > 0 && open.length > other.length && <div className="otherhead static"><span>Andere winkels</span><span>{other.length}</span></div>}
+          {groupByStore(other).map(([store, g]) => (
             <section className="group" key={'w-' + store}>
               <h2>
                 <span className="aisle"><Store size={15} style={{ color: 'var(--c-druif-fg)' }} />Bij de {store.toLowerCase()}</span>

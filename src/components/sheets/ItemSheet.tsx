@@ -40,8 +40,9 @@ export default function ItemSheet({ id }: { id: string }) {
     if (patch.note && patch.note !== (item!.note || '')) changed.push(`notitie "${patch.note}"`);
     if (shop && f!.cat !== (item!.cat || 'overig')) changed.push(`afdeling ${CAT_LABEL[item!.cat || 'overig']} werd ${CAT_LABEL[f!.cat]}`);
     if (changed.length) learnFrom(`Item "${patch.text}" op de lijst "${list?.name || ''}" aangepast: ${changed.join('; ')}.`);
-    if (shop && (normStore(f!.store) || SUPERMARKT) !== (normStore(item!.store) || SUPERMARKT)) setStore(id, f!.store);
-    if (f!.listId !== item!.listId) moveItem(id, f!.listId);
+    // Ordered online: setStore moves it to the to-do list as "… bestellen".
+    const ordered = shop && (normStore(f!.store) || SUPERMARKT) !== (normStore(item!.store) || SUPERMARKT) && setStore(id, f!.store, patch);
+    if (!ordered && f!.listId !== item!.listId) moveItem(id, f!.listId);
     closeSheet();
   }
 

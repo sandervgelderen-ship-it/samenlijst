@@ -17,7 +17,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp } from 'firebase/app';
 import { getAI, getGenerativeModel, GoogleAIBackend } from 'firebase/ai';
 import { cleanOffers, cleanPrices, groundingSources, mergeOffers, parseLoose } from '../src/lib/aiClean';
-import { isSuper, memoryLines, sameStore, sortPrices, todayLong } from '../src/lib/domain';
+import { isSuper, memoryLines, sameStore, sortPrices, todayLong, usualBuys } from '../src/lib/domain';
 import { OFFERS_SHAPE, offersPrompt, PRICES_SHAPE, pricesPrompt } from '../src/server/prompts';
 import type { ItemPrice, List, Memory, OfferResult } from '../src/types';
 
@@ -76,7 +76,7 @@ for (const h of households.docs) {
     const chosen = (Array.isArray(h.get('supermarkets')) ? h.get('supermarkets') as unknown[] : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 12);
     const parts: ReturnType<typeof cleanOffers>[] = [], metas: unknown[] = [];
     for (const store of chosen.length ? chosen : [null]) {
-      const prompt = `${offersPrompt({ place, open, memory, today: todayLong(), stores: store ? [store] : undefined })}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet bekend is):\n${OFFERS_SHAPE}`;
+      const prompt = `${offersPrompt({ place, open, usual: usualBuys(lists, open), memory, today: todayLong(), stores: store ? [store] : undefined })}\n\nAntwoord met alleen JSON in precies deze vorm (lege string als iets niet bekend is):\n${OFFERS_SHAPE}`;
       try {
         const result = await search(prompt);
         metas.push(result.response.candidates?.[0]?.groundingMetadata);

@@ -4,12 +4,12 @@
  */
 import { deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { post } from '../api';
-import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, cleanPrices, mergeOffers, cleanQuestions, cleanRules, cleanShop, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
+import { cleanAisles, cleanAnalysis, cleanOffers, cleanPlan, cleanPrices, mergeOffers, cleanQuestions, cleanRules, cleanShop, cleanSupplies, cleanTodo, type Analysis, type Suggestion } from '../lib/aiClean';
 import {
-  CAT_LABEL, catFor, colorOf, COLORS, decideStore, dueInfo, isSuper, kbKey, sameStore, sortPrices, knownStore, makeMemory, memoryLines, nextDue, normStore, parseDue, parseEntry, parseRepeat, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS, type Repeat,
+  CAT_LABEL, catFor, colorOf, COLORS, decideStore, dueInfo, isOnline, isSuper, orderTask, usualBuys, kbKey, sameStore, sortPrices, knownStore, makeMemory, memoryLines, nextDue, normStore, parseDue, parseEntry, parseRepeat, pickCat, prepEntry, route, splitEntries, storeOptions, todayISO, todayLong, CATS, type Repeat,
 } from '../lib/domain';
 import { S, setS } from '../store/useStore';
-import type { CatId, Entry, Item, ItemPrice, List, ListKind, Memory, OfferResult, PlanAnswer, Pending, Receipt, RouteWhy, StoreAsk } from '../types';
+import type { CatId, Entry, Item, ItemPrice, List, ListKind, Memory, OfferResult, PlanAnswer, Pending, Receipt, RouteWhy, StoreAsk, SupplyAsk } from '../types';
 import { hRef, itemRef, kbRef, listRef, newId, safeWrite } from './repo';
 import { toast } from './toast';
 import { confetti } from '../lib/confetti';
@@ -86,7 +86,7 @@ async function runLessons() {
 export type AddResult = { id: string; status: 'new' | 'dup' | 'revived' } | null;
 
 type StoreHint = { store?: string | null; storeConf?: number; aiStore?: boolean };
-export function addItem(listId: string, raw: string, opts: { due?: string | null; quiet?: boolean; weight?: number; note?: string; cat?: CatId | null; repeat?: string } & StoreHint = {}): AddResult {
+export function addItem(listId: string, raw: string, opts: { due?: string | null; quiet?: boolean; weight?: number; note?: string; cat?: CatId | null; repeat?: string; supplies?: boolean } & StoreHint = {}): AddResult {
   const list = listById(listId); if (!list || !raw.trim()) return null;
   let { text, qty } = parseEntry(raw);
   let due = opts.due || null;
@@ -115,6 +115,14 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
   const where = list.kind === 'shop'
     ? decideStore(knownStore(text, S().items), opts.aiStore ? { store: opts.store, conf: opts.storeConf } : null)
     : { store: null, ask: false, guess: null };
+  // Ordered online: that is a task ("Hooi bestellen") on the to-do list, not a grocery.
+  const todo = where.store && isOnline(where.store) ? orderList() : undefined;
+  if (todo) {
+    const o = orderTask(text, qty);
+    const r = addItem(todo.id, o.text, { quiet: opts.quiet, note: o.note, supplies: false });
+    if (r && !opts.quiet) toast(`${o.text} staat op ${todo.name}`);
+    return r;
+  }
   if (same && same.done) {
     const patch: Partial<Item> = { done: false, doneBy: null, doneAt: null, addedBy: me(), createdAt: Date.now() };
     if (qty) patch.qty = qty;
@@ -134,7 +142,63 @@ export function addItem(listId: string, raw: string, opts: { due?: string | null
   if (where.ask) askStore(id, listId, text, where.guess);
   if (list.kind === 'shop') queuePrices(id);
   if (list.kind === 'todo' && list.autoPlan !== false && S().aiOn) queuePlan(id, false, body.text);
+  if (list.kind === 'todo' && opts.supplies !== false) void checkSupplies(id, body.text);
   return { id, status: 'new' };
+}
+
+/* ---------- Online bestellen: a task, not a grocery ---------- */
+/** The to-do list where online orders go: the one with "todo" or "taken" in its name, else the first. */
+function orderList(): List | undefined {
+  const todos = S().lists.filter(l => l.kind === 'todo');
+  return todos.find(l => /to ?do|taken|klus/i.test(l.name)) || todos[0];
+}
+/** A grocery that turns out to be ordered online moves to the to-do list as "… bestellen". */
+function toOrders(itemId: string, now: Partial<Item> = {}): boolean {
+  const found = S().items.find(i => i.id === itemId), todo = orderList();
+  const it = found ? { ...found, ...now } : undefined;
+  if (!it || !todo || listById(it.listId)?.kind !== 'shop') return false;
+  const o = orderTask(it.text, it.qty);
+  const twin = listItems(todo.id).find(i => !i.done && kbKey(i.text) === kbKey(o.text));
+  if (twin) write(() => deleteDoc(itemRef(itemId)));
+  else write(() => updateDoc(itemRef(itemId), { listId: todo.id, text: o.text, qty: '', note: [o.note, it.note].filter(Boolean).join(' · ').slice(0, 140), cat: null, store: 'Online', prices: null, pricesAt: null, due: null, assignee: null }));
+  setS({ storeAsks: S().storeAsks.filter(a => a.itemId !== itemId) });
+  toast(`Online bestellen: ${o.text} staat nu op ${todo.name}`);
+  return true;
+}
+
+/* ---------- Is er nog…? Supplies a task uses up ----------
+ * When a task is added, or a recurring one comes back, Gemini names what it uses up ("Konijnenhok schoonmaken":
+ * hooi, stro, houtkorrels), with the memory and what is already on the shopping list. Tap what has run out; it goes
+ * on the shopping list. Asked only on this phone (not stored), like "Waar koop je dit?". */
+function supplyList(): List | undefined {
+  const shops = S().lists.filter(l => l.kind === 'shop');
+  return shops.find(l => /boodschap/i.test(l.name)) || shops[0];
+}
+export async function checkSupplies(taskId: string, text?: string) {
+  if (!S().aiOn || S().readOnly || !supplyList()) return;
+  try {
+    const ctx = await taskFor(taskId, text); if (!ctx) return;
+    const shop = new Set(S().lists.filter(l => l.kind === 'shop').map(l => l.id));
+    const open = S().items.filter(i => !i.done && shop.has(i.listId));
+    const openTxt = open.map(i => i.text).slice(0, 60);
+    const items = cleanSupplies(await post('supplies', { ...ctx, open: openTxt, usual: usualBuys(S().lists, openTxt) }), open);
+    if (!items.length || !S().items.some(i => i.id === taskId && !i.done)) return;
+    const ask: SupplyAsk = { aid: newId('items'), taskId, task: ctx.task, items };
+    setS({ supplyAsks: [...S().supplyAsks.filter(a => a.taskId !== taskId), ask] });
+  } catch (e) { console.warn('Is er nog', e); }
+}
+/** What has run out goes on the shopping list (with the shop Gemini named); extra = something else, typed. */
+export function answerSupplies(aid: string, picked: string[], extra = '') {
+  const a = S().supplyAsks.find(x => x.aid === aid); if (!a) return;
+  setS({ supplyAsks: S().supplyAsks.filter(x => x.aid !== aid) });
+  const shop = supplyList(); if (!shop) return;
+  const note = `Voor: ${a.task}`.slice(0, 140);
+  const add = a.items.filter(x => picked.includes(x.text) && !x.onList);
+  add.forEach(x => addItem(shop.id, (x.qty ? x.qty + ' ' : '') + x.text, { quiet: true, note, cat: x.cat, store: x.store || null, storeConf: 0.85, aiStore: !!x.store }));
+  if (extra.trim()) void listAdd(shop.id, extra.trim());
+  const n = add.length + (extra.trim() ? 1 : 0);
+  if (n) toast(`${n === 1 ? (add[0]?.text || extra.trim()) : `${n} dingen`} op ${shop.name}`);
+  if (add.length) learnFrom(`Bij de taak "${a.task}" was dit op: ${add.map(x => x.text.toLowerCase()).join(', ')}.`);
 }
 
 /* ---------- Waar koop je dit? ---------- */
@@ -152,16 +216,19 @@ export function answerStore(aid: string, store: string | null) {
   setS({ storeAsks: S().storeAsks.filter(x => x.aid !== aid) });
   const n = normStore(store); if (!n) return;
   const it = S().items.find(i => i.id === a.itemId);
-  if (it) write(() => updateDoc(itemRef(it.id), { store: n }));
+  if (it && !(isOnline(n) && toOrders(it.id))) write(() => updateDoc(itemRef(it.id), { store: n }));
   learnFrom(`Gevraagd waar "${it?.text || a.text}" gekocht wordt; antwoord: ${n}${a.guess && normStore(a.guess) !== n ? ` (Gemini dacht ${a.guess})` : ''}.`);
 }
 /** Change where an item is bought (item sheet): may teach a general rule. */
-export function setStore(itemId: string, store: string | null) {
-  const it = S().items.find(i => i.id === itemId); if (!it) return;
+/** now = what was just saved in the item sheet (the snapshot may not have it yet). Returns true when it moved to the to-do list. */
+export function setStore(itemId: string, store: string | null, now: Partial<Item> = {}): boolean {
+  const it = S().items.find(i => i.id === itemId); if (!it) return false;
   const n = normStore(store) || 'Supermarkt';
-  write(() => updateDoc(itemRef(itemId), { store: n }));
   learnFrom(`"${it.text}" aangepast: kopen bij ${n} in plaats van ${normStore(it.store) || 'Supermarkt'}.`);
+  if (isOnline(n) && toOrders(itemId, now)) return true;
+  write(() => updateDoc(itemRef(itemId), { store: n }));
   setS({ storeAsks: S().storeAsks.filter(a => a.itemId !== itemId) });
+  return false;
 }
 
 export function toggleItem(id: string, origin?: { x: number; y: number }) {
@@ -185,6 +252,8 @@ export function toggleItem(id: string, origin?: { x: number; y: number }) {
     write(() => setDoc(itemRef(nextId), body));
     patch.nextId = nextId;
     toast(`De volgende keer staat erop: ${dueInfo(due).label.toLowerCase()}`);
+    // Just done, so now you know: is there still enough hay for next time?
+    void checkSupplies(nextId, it.text);
   } else if (!done && it.nextId) {
     const next = S().items.find(i => i.id === it.nextId);
     if (next && !next.done) write(() => deleteDoc(itemRef(next.id)));
@@ -608,11 +677,12 @@ export async function findOffers() {
   if (S().offersBusy) return;
   const shop = new Set(S().lists.filter(l => l.kind === 'shop').map(l => l.id));
   const open = S().items.filter(i => !i.done && shop.has(i.listId)).map(i => i.text).slice(0, 60);
+  const usual = usualBuys(S().lists, open);
   setS({ offersBusy: true });
   try {
     // Chosen supermarkets: one search each, so every chain gets its turn. Otherwise Gemini finds them itself.
     const chosen = (h.supermarkets || []).filter(Boolean);
-    const ask = (stores?: string[]) => post<Record<string, unknown>>('offers', { place: p, open, memory: memoryForAi(), today: todayLong(), stores });
+    const ask = (stores?: string[]) => post<Record<string, unknown>>('offers', { place: p, open, usual, memory: memoryForAi(), today: todayLong(), stores });
     // One supermarket at a time (several searches at once run into the AI limit), with one retry after a pause.
     const settled: PromiseSettledResult<Record<string, unknown>>[] = [];
     if (!chosen.length) settled.push({ status: 'fulfilled', value: await ask() });
@@ -679,8 +749,9 @@ export async function lookupPrices(ids?: string[], opts: { quiet?: boolean } = {
   setS({ pricesBusy: true });
   let failed = 0;
   try {
-    // A few items: one search for all shops. A whole list: one search per supermarket, so none is skipped.
-    const jobs: [Item[], string[]][] = stores.length ? (supers.length <= 6 ? [[supers, stores]] : stores.map(st => [supers, [st]])) : [];
+    // A few items at one or two shops: one search. Otherwise one search per supermarket, so none is skipped
+    // (in one search for many shops Gemini tends to drop the ones with fewer prices online, like Lidl).
+    const jobs: [Item[], string[]][] = stores.length ? (supers.length <= 6 && stores.length <= 2 ? [[supers, stores]] : stores.map(st => [supers, [st]])) : [];
     jobs.push([others, []]);
     for (const [batch, at] of jobs) { try { await ask(batch, at); } catch (e) { console.warn('Prijzen', e); failed++; } }
     const now = Date.now();
